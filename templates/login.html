@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login — CRM DCSS</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900 min-h-screen flex items-center justify-center p-4">
+
+    <div class="w-full max-w-md">
+        <!-- Logo / Brand -->
+        <div class="text-center mb-8">
+            <div class="inline-flex items-center justify-center w-16 h-16 bg-blue-600 rounded-2xl shadow-lg mb-4">
+                <i class="fas fa-chart-line text-white text-2xl"></i>
+            </div>
+            <h1 class="text-white text-2xl font-bold">CRM Leads Tracker</h1>
+            <p class="text-slate-400 text-sm mt-1">LOB DCSS — PKP 2026</p>
+        </div>
+
+        <!-- Card -->
+        <div class="bg-white rounded-2xl shadow-2xl overflow-hidden">
+            <div class="bg-gradient-to-r from-blue-600 to-blue-800 px-6 py-4">
+                <h2 class="text-white font-semibold">Masuk ke Sistem</h2>
+                <p class="text-blue-200 text-xs mt-0.5">Masukkan email dan password Anda</p>
+            </div>
+
+            <form method="post" action="/login" class="p-6 space-y-4">
+                <input type="hidden" name="next" value="{{ next }}">
+
+                {% if error %}
+                <div class="bg-red-50 border border-red-200 rounded-lg px-4 py-3 flex items-center gap-3">
+                    <i class="fas fa-exclamation-circle text-red-400"></i>
+                    <span class="text-red-700 text-sm">{{ error }}</span>
+                </div>
+                {% endif %}
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1.5">
+                        <i class="fas fa-envelope text-gray-400 mr-1.5"></i>Email
+                    </label>
+                    <input type="email" name="email" required autofocus
+                        placeholder="email@pkp.co.id"
+                        class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1.5">
+                        <i class="fas fa-lock text-gray-400 mr-1.5"></i>Password
+                    </label>
+                    <div class="relative">
+                        <input type="password" name="password" id="pw" required
+                            placeholder="••••••••"
+                            class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all pr-12">
+                        <button type="button" onclick="togglePw()"
+                            class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                            <i class="fas fa-eye" id="pw-icon"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <button type="submit"
+                    class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-xl transition-all shadow-md hover:shadow-lg active:scale-[0.98] flex items-center justify-center gap-2">
+                    <i class="fas fa-sign-in-alt"></i> Masuk
+                </button>
+            </form>
+
+            <div class="px-6 pb-5 text-center text-xs text-gray-400">
+                Hubungi Admin jika lupa password
+            </div>
+        </div>
+
+        <p class="text-center text-slate-500 text-xs mt-6">
+            © 2026 PKP — CRM Leads Tracker v1.0
+        </p>
+    </div>
+
+    <script>
+    function togglePw() {
+        const pw = document.getElementById('pw');
+        const icon = document.getElementById('pw-icon');
+        if (pw.type === 'password') {
+            pw.type = 'text';
+            icon.className = 'fas fa-eye-slash';
+        } else {
+            pw.type = 'password';
+            icon.className = 'fas fa-eye';
+        }
+    }
+    </script>
+</body>
+</html>

@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+{% block title %}Contacts{% endblock %}
+{% block page_title %}Contact Directory{% endblock %}
+
+{% block content %}
+
+{# ── SEARCH BAR ──────────────────────────────────────────────────────────── #}
+<div class="bg-white rounded-xl border border-gray-100 shadow-sm p-3 mb-4">
+  <form method="get" class="flex gap-2">
+    <div class="relative flex-1">
+      <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-300 text-xs pointer-events-none"></i>
+      <input name="search" value="{{ search }}" placeholder="Cari nama, company, no HP..."
+        class="w-full border border-gray-200 rounded-lg pl-8 pr-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+    </div>
+    <button type="submit"
+      class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700 transition font-medium whitespace-nowrap">
+      <i class="fas fa-search"></i>
+    </button>
+    {% if search %}
+    <a href="/contacts"
+       class="flex items-center gap-1 text-gray-400 hover:text-gray-600 px-3 py-2 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 transition">
+      <i class="fas fa-times text-xs"></i>
+    </a>
+    {% endif %}
+  </form>
+  <div class="mt-2 text-xs text-gray-400">{{ contacts|length }} kontak ditemukan</div>
+</div>
+
+{# ── CONTACT CARDS ────────────────────────────────────────────────────────── #}
+{% if contacts %}
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+  {% for c in contacts %}
+  <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-4 hover:shadow-md hover:border-blue-200 transition-all lead-card">
+
+    {# Header #}
+    <div class="flex items-start gap-3 mb-3">
+      <div class="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600
+                  flex items-center justify-center text-white font-bold text-sm flex-shrink-0 shadow-sm">
+        {{ c.nama_contact[0]|upper }}
+      </div>
+      <div class="min-w-0 flex-1">
+        <div class="font-semibold text-gray-800 text-sm leading-tight">{{ c.nama_contact }}</div>
+        <div class="text-xs text-gray-400 mt-0.5 truncate">
+          {{ c.jabatan or '' }}{% if c.dept %} · {{ c.dept }}{% endif %}
+        </div>
+      </div>
+      <span class="flex-shrink-0 text-xs px-2 py-0.5 rounded-full font-medium bg-purple-100 text-purple-700">
+        {{ c.role or '—' }}
+      </span>
+    </div>
+
+    {# Company link #}
+    <a href="/pipeline/{{ c.lead_id }}"
+       class="flex items-center gap-2 text-xs text-blue-600 hover:text-blue-700 font-medium mb-3 hover:underline">
+      <i class="fas fa-building text-blue-300 w-3.5"></i>
+      <span class="truncate">{{ c.nama_company }}</span>
+      <span class="text-gray-400 font-mono flex-shrink-0">{{ c.lead_id }}</span>
+    </a>
+
+    {# Contact info #}
+    <div class="space-y-1.5 text-xs">
+      {% if c.no_hp %}
+      <a href="tel:{{ c.no_hp }}"
+         class="flex items-center gap-2.5 text-gray-600 hover:text-green-600 transition-colors group">
+        <span class="w-7 h-7 bg-green-50 group-hover:bg-green-100 rounded-lg flex items-center justify-center transition-colors flex-shrink-0">
+          <i class="fas fa-phone text-green-500 text-xs"></i>
+        </span>
+        {{ c.no_hp }}
+      </a>
+      {% endif %}
+      {% if c.email %}
+      <a href="mailto:{{ c.email }}"
+         class="flex items-center gap-2.5 text-gray-600 hover:text-blue-600 transition-colors group">
+        <span class="w-7 h-7 bg-blue-50 group-hover:bg-blue-100 rounded-lg flex items-center justify-center transition-colors flex-shrink-0">
+          <i class="fas fa-envelope text-blue-500 text-xs"></i>
+        </span>
+        <span class="truncate">{{ c.email }}</span>
+      </a>
+      {% endif %}
+      {% if c.telepon %}
+      <div class="flex items-center gap-2.5 text-gray-500">
+        <span class="w-7 h-7 bg-gray-50 rounded-lg flex items-center justify-center flex-shrink-0">
+          <i class="fas fa-building text-gray-400 text-xs"></i>
+        </span>
+        {{ c.telepon }}
+      </div>
+      {% endif %}
+      {% if c.preferensi_kontak %}
+      <div class="flex items-center gap-2.5 text-gray-500">
+        <span class="w-7 h-7 bg-yellow-50 rounded-lg flex items-center justify-center flex-shrink-0">
+          <i class="fas fa-star text-yellow-400 text-xs"></i>
+        </span>
+        Via {{ c.preferensi_kontak }}
+      </div>
+      {% endif %}
+    </div>
+
+    {% if c.catatan %}
+    <div class="mt-3 pt-3 border-t border-gray-50 text-xs text-gray-400 bg-gray-50 rounded-lg px-2.5 py-2 leading-relaxed">
+      {{ c.catatan }}
+    </div>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+
+{% else %}
+<div class="bg-white rounded-xl border border-gray-100 shadow-sm p-12 text-center">
+  <i class="fas fa-address-book text-4xl mb-3 block text-gray-200"></i>
+  <p class="text-gray-500 font-medium text-sm mb-1">
+    {% if search %}Tidak ada kontak yang cocok{% else %}Belum ada kontak{% endif %}
+  </p>
+  <p class="text-gray-400 text-xs">
+    {% if search %}
+    Coba kata kunci lain atau <a href="/contacts" class="text-blue-500 hover:underline">reset filter</a>
+    {% else %}
+    Tambahkan kontak dari halaman detail lead
+    {% endif %}
+  </p>
+</div>
+{% endif %}
+
+{% endblock %}

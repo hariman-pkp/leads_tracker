@@ -1,0 +1,236 @@
+{% extends "base.html" %}
+{% block title %}Revenue Tracker{% endblock %}
+{% block page_title %}Revenue Tracker{% endblock %}
+
+{% block content %}
+{# ── Period Filter ─────────────────────────────────────────────────────────── #}
+<form method="get" class="bg-white rounded-xl border border-gray-100 shadow-sm p-3 mb-4">
+  <div class="flex flex-wrap gap-2 items-center">
+    <div class="relative flex-1 min-w-[140px]">
+      <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-300 text-xs pointer-events-none"></i>
+      <input name="search" value="{{ search }}" placeholder="Cari produk / klien..."
+        class="w-full border border-gray-200 rounded-lg pl-8 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+    </div>
+    <select name="tahun" class="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400">
+      {% for y in years %}<option value="{{ y }}" {% if cur_year == y %}selected{% endif %}>{{ y }}</option>{% endfor %}
+    </select>
+    <select name="month" class="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400">
+      <option value="0">Semua Bulan</option>
+      {% for mnum, mname in months %}
+      <option value="{{ mnum }}" {% if cur_month == mnum %}selected{% endif %}>{{ mname }}</option>
+      {% endfor %}
+    </select>
+    <select name="owner" class="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400">
+      <option value="">Semua Owner</option>
+      {% for o in owners %}<option value="{{ o }}" {% if filter_owner == o %}selected{% endif %}>{{ o }}</option>{% endfor %}
+    </select>
+    <select name="kategori" class="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400">
+      <option value="">Semua Kategori</option>
+      <option value="Recurring" {% if filter_kategori=='Recurring' %}selected{% endif %}>Recurring</option>
+      <option value="Project" {% if filter_kategori=='Project' %}selected{% endif %}>Project</option>
+    </select>
+    <select name="status" class="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400">
+      <option value="">Semua Status</option>
+      {% for s in ['On Track','At Risk','Critical'] %}
+      <option value="{{ s }}" {% if filter_status == s %}selected{% endif %}>{{ s }}</option>{% endfor %}
+    </select>
+    <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700 transition font-medium">
+      <i class="fas fa-filter mr-1"></i>Filter
+    </button>
+    {% if search or filter_owner or filter_kategori or filter_status or cur_month %}
+    <a href="/revenue/tracker?tahun={{ cur_year }}" class="text-gray-400 hover:text-gray-600 text-sm px-2">Reset</a>
+    {% endif %}
+  </div>
+</form>
+
+{# ── Summary Strip ─────────────────────────────────────────────────────────── #}
+<div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+  <div class="bg-slate-800 text-white rounded-xl p-3 sm:p-4">
+    <div class="text-lg sm:text-2xl font-black">Rp {{ "{:,.0f}".format(total_actual/1e9) }}M</div>
+    <div class="text-xs opacity-70 mt-0.5">Actual {% if cur_month %}{{ months[cur_month-1][1] }} {% endif %}{{ cur_year }}</div>
+    <div class="text-xs opacity-50 mt-0.5 flex items-center gap-1">
+      <i class="fas fa-file-invoice text-xs"></i> Dari Invoice &amp; Payment
+    </div>
+  </div>
+  <div class="bg-blue-600 text-white rounded-xl p-3 sm:p-4">
+    <div class="text-lg sm:text-2xl font-black">Rp {{ "{:,.0f}".format(total_target/1e9) }}M</div>
+    <div class="text-xs opacity-70 mt-0.5">Total Target {{ cur_year }}</div>
+  </div>
+  <div class="rounded-xl p-3 sm:p-4 border {% if ach_pct >= 80 %}bg-green-50 border-green-200{% elif ach_pct >= 50 %}bg-yellow-50 border-yellow-200{% else %}bg-red-50 border-red-200{% endif %}">
+    <div class="text-lg sm:text-2xl font-black {% if ach_pct >= 80 %}text-green-700{% elif ach_pct >= 50 %}text-yellow-700{% else %}text-red-700{% endif %}">{{ ach_pct }}%</div>
+    <div class="text-xs opacity-70 mt-0.5">Achievement</div>
+  </div>
+  <div class="bg-white rounded-xl border border-gray-100 p-3 sm:p-4 flex flex-col justify-between">
+    <div class="text-lg sm:text-2xl font-black text-gray-800">{{ total_projects }}</div>
+    <div class="text-xs text-gray-400 mt-0.5">Proyek Aktif</div>
+    <a href="/revenue/invoice?tahun={{ cur_year }}" class="mt-1 text-xs text-blue-500 hover:underline">
+      <i class="fas fa-external-link-alt mr-0.5"></i>Lihat Semua Invoice
+    </a>
+  </div>
+</div>
+
+{# ── Info banner: data sumber ─────────────────────────────────────────────── #}
+<div class="bg-blue-50 border border-blue-200 rounded-xl px-4 py-2 mb-4 text-xs text-blue-700 flex items-center gap-2">
+  <i class="fas fa-info-circle"></i>
+  <span>Kolom <strong>Actual</strong> diambil otomatis dari total <em>Paid Amount</em> di
+    <a href="/revenue/invoice?tahun={{ cur_year }}" class="underline font-semibold">Invoice &amp; Payment</a>.
+    Status &amp; Risk Level dihitung otomatis berdasarkan pencapaian vs. pace tahun berjalan.</span>
+</div>
+
+{# ── MOBILE: Cards ─────────────────────────────────────────────────────────── #}
+<div class="lg:hidden space-y-3">
+  {% for p in projects %}
+  {% set pct = (p.achievement_pct * 100)|round(1) %}
+  <div class="bg-white rounded-xl border {% if p.status=='Critical' %}border-red-200{% elif p.status=='At Risk' %}border-yellow-200{% else %}border-green-200{% endif %} shadow-sm overflow-hidden">
+    <div class="px-4 py-3">
+      <div class="flex items-start justify-between gap-2 mb-2">
+        <div class="min-w-0">
+          <div class="font-semibold text-gray-800 text-sm">{{ p.product }}</div>
+          <div class="text-xs text-gray-400">{{ p.client }} · {{ p.owner or '—' }}</div>
+          <div class="text-xs font-mono text-gray-300 mt-0.5">{{ p.project_id }}</div>
+        </div>
+        <div class="flex flex-col items-end gap-1 flex-shrink-0">
+          <span class="text-xs px-2 py-0.5 rounded-full font-semibold
+            {% if p.status=='On Track' %}bg-green-100 text-green-700
+            {% elif p.status=='At Risk' %}bg-yellow-100 text-yellow-700
+            {% else %}bg-red-100 text-red-700{% endif %}">{{ p.status }}</span>
+          <span class="text-xs font-semibold
+            {% if p.risk_level=='HIGH' %}text-red-500{% elif p.risk_level=='MEDIUM' %}text-yellow-600{% else %}text-gray-400{% endif %}">
+            Risk: {{ p.risk_level }}
+          </span>
+        </div>
+      </div>
+      <div class="grid grid-cols-3 gap-2 text-center text-xs mb-3">
+        <div>
+          <div class="text-gray-400">Target</div>
+          <div class="font-semibold text-gray-700">Rp {{ "{:,.0f}".format(p.revenue_target/1e6) }}Jt</div>
+        </div>
+        <div class="border-x border-gray-100">
+          <div class="text-gray-400">Actual <i class="fas fa-file-invoice text-blue-300 ml-0.5"></i></div>
+          <div class="font-semibold text-blue-600">Rp {{ "{:,.0f}".format(p.invoice_actual/1e6) }}Jt</div>
+          <div class="text-gray-300 text-xs">{{ p.invoice_count }} inv</div>
+        </div>
+        <div>
+          <div class="text-gray-400">Gap</div>
+          <div class="font-semibold {% if p.revenue_target - p.invoice_actual > 0 %}text-red-500{% else %}text-green-600{% endif %}">
+            Rp {{ "{:,.0f}".format((p.revenue_target - p.invoice_actual)/1e6) }}Jt
+          </div>
+        </div>
+      </div>
+      <div class="bg-gray-100 rounded-full h-2 mb-1">
+        <div class="h-2 rounded-full {% if pct>=80 %}bg-green-500{% elif pct>=50 %}bg-yellow-500{% else %}bg-red-400{% endif %}"
+             style="width: {{ [pct,100]|min }}%"></div>
+      </div>
+      <div class="flex justify-between text-xs text-gray-500">
+        <span>{{ pct }}%</span>
+        <a href="/revenue/invoice?project_id={{ p.project_id }}&tahun={{ cur_year }}"
+           class="text-blue-500 hover:underline"><i class="fas fa-file-invoice mr-1"></i>Invoice</a>
+      </div>
+    </div>
+  </div>
+  {% else %}
+  <div class="bg-white rounded-xl border border-gray-100 p-10 text-center text-gray-400">
+    <i class="fas fa-tasks text-3xl mb-2 block text-gray-200"></i>
+    Tidak ada proyek yang cocok dengan filter
+  </div>
+  {% endfor %}
+</div>
+
+{# ── DESKTOP: Table ────────────────────────────────────────────────────────── #}
+<div class="hidden lg:block bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+  <div class="px-5 py-3 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
+    <span class="text-sm font-medium text-gray-600">{{ projects|length }} proyek ditemukan — {{ cur_year }}{% if cur_month %} / {{ months[cur_month-1][1] }}{% endif %}</span>
+    <span class="text-xs text-gray-400 flex items-center gap-1">
+      <i class="fas fa-sync-alt text-blue-400"></i> Status &amp; Risk: otomatis
+    </span>
+  </div>
+  <div class="overflow-x-auto">
+    <table class="w-full text-sm">
+      <thead class="bg-gray-50 text-gray-400 text-xs uppercase border-b border-gray-100">
+        <tr>
+          <th class="px-3 py-3 text-left w-24">ID</th>
+          <th class="px-3 py-3 text-left">Produk</th>
+          <th class="px-3 py-3 text-left">Client</th>
+          <th class="px-3 py-3 text-left">Owner</th>
+          <th class="px-3 py-3 text-left">Kat.</th>
+          <th class="px-3 py-3 text-left">Type</th>
+          <th class="px-3 py-3 text-right">Target (Rp)</th>
+          <th class="px-3 py-3 text-right">
+            Actual (Rp)
+            <span class="ml-1 text-blue-400" title="Dari Invoice &amp; Payment"><i class="fas fa-file-invoice"></i></span>
+          </th>
+          <th class="px-3 py-3 text-center">Ach%</th>
+          <th class="px-3 py-3 text-center">Status <span class="text-blue-400" title="Otomatis"><i class="fas fa-robot"></i></span></th>
+          <th class="px-3 py-3 text-center">Risk <span class="text-blue-400" title="Otomatis"><i class="fas fa-robot"></i></span></th>
+          <th class="px-3 py-3 text-center">Invoice</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-gray-50">
+        {% for p in projects %}
+        {% set pct = (p.achievement_pct * 100)|round(1) %}
+        <tr class="hover:bg-gray-50 {% if p.status=='Critical' %}hover:bg-red-50{% endif %} transition-colors">
+          <td class="px-3 py-2.5 font-mono text-xs text-gray-400">{{ p.project_id }}</td>
+          <td class="px-3 py-2.5 font-medium text-gray-800 max-w-[160px]">
+            <div class="truncate">{{ p.product }}</div>
+          </td>
+          <td class="px-3 py-2.5 text-xs text-gray-600">{{ p.client }}</td>
+          <td class="px-3 py-2.5 text-xs text-gray-500">{{ p.owner or '—' }}</td>
+          <td class="px-3 py-2.5">
+            <span class="text-xs px-2 py-0.5 rounded-full {% if p.kategori=='Recurring' %}bg-blue-100 text-blue-700{% else %}bg-purple-100 text-purple-700{% endif %}">
+              {{ p.kategori }}
+            </span>
+          </td>
+          <td class="px-3 py-2.5 text-xs text-gray-500">{{ p.type }}</td>
+          <td class="px-3 py-2.5 text-right text-xs font-mono text-gray-600">
+            {{ "{:,.0f}".format(p.revenue_target) }}
+          </td>
+          <td class="px-3 py-2.5 text-right text-xs font-mono font-semibold">
+            <span class="{% if p.invoice_actual >= p.revenue_target %}text-green-700{% else %}text-blue-700{% endif %}">
+              {{ "{:,.0f}".format(p.invoice_actual) }}
+            </span>
+            {% if p.invoice_count > 0 %}
+            <div class="text-gray-300 text-xs">{{ p.invoice_count }} inv</div>
+            {% endif %}
+          </td>
+          <td class="px-3 py-2.5 text-center">
+            <div class="flex items-center gap-1.5 justify-center">
+              <div class="w-12 bg-gray-200 rounded-full h-1.5">
+                <div class="h-1.5 rounded-full {% if pct>=80 %}bg-green-500{% elif pct>=50 %}bg-yellow-500{% else %}bg-red-400{% endif %}"
+                     style="width:{{ [pct,100]|min }}%"></div>
+              </div>
+              <span class="text-xs font-semibold {% if pct>=80 %}text-green-700{% elif pct>=50 %}text-yellow-700{% else %}text-red-600{% endif %}">
+                {{ pct }}%
+              </span>
+            </div>
+          </td>
+          <td class="px-3 py-2.5 text-center">
+            <span class="text-xs px-2 py-0.5 rounded-full font-semibold
+              {% if p.status=='On Track' %}bg-green-100 text-green-700
+              {% elif p.status=='At Risk' %}bg-yellow-100 text-yellow-700
+              {% else %}bg-red-100 text-red-700{% endif %}">{{ p.status }}</span>
+          </td>
+          <td class="px-3 py-2.5 text-center">
+            <span class="text-xs px-1.5 py-0.5 rounded font-medium
+              {% if p.risk_level=='HIGH' %}bg-red-50 text-red-600{% elif p.risk_level=='MEDIUM' %}bg-yellow-50 text-yellow-600{% else %}bg-gray-50 text-gray-400{% endif %}">
+              {{ p.risk_level }}
+            </span>
+          </td>
+          <td class="px-3 py-2.5 text-center">
+            <a href="/revenue/invoice?project_id={{ p.project_id }}&tahun={{ cur_year }}"
+               class="text-xs text-blue-500 hover:text-blue-700 px-2 py-1 hover:bg-blue-50 rounded transition"
+               title="Lihat Invoice">
+              <i class="fas fa-file-invoice"></i>
+              {% if p.invoice_count > 0 %}<span class="ml-1">{{ p.invoice_count }}</span>{% endif %}
+            </a>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="12" class="px-5 py-10 text-center text-gray-400">
+          Tidak ada proyek yang cocok dengan filter
+        </td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

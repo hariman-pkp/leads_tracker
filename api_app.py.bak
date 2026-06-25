@@ -1,0 +1,1978 @@
+"""
+api_app.py — CRM REST API (Phase 2)
+=====================================
+FastAPI REST backend untuk Nuxt 3 frontend.
+
+Fitur:
+  - JWT Bearer token authentication
+  - CORS untuk localhost:3000 (Nuxt dev) dan domain produksi
+  - Semua endpoint return JSON
+  - Semua business logic sama dengan main.py (Jinja2 SSR)
+
+Jalankan:
+    uvicorn api_app:app --host 0.0.0.0 --port 8001 --reload
+
+Endpoint utama:
+  POST /api/v1/auth/login          → login, terima JWT token
+  GET  /api/v1/auth/me             → info user saat ini
+  GET  /api/v1/dashboard           → statistik dashboard
+  CRUD /api/v1/pipeline            → leads pipeline
+  GET  /api/v1/today               → aktivitas hari ini
+  GET  /api/v1/schedule            → jadwal follow-up
+  CRUD /api/v1/followup            → follow-up log
+  GET  /api/v1/winloss             → win/loss records
+  CRUD /api/v1/contacts            → contacts
+  GET  /api/v1/insights            → pipeline insights
+  GET  /api/v1/revenue/...         → semua modul revenue
+  GET  /api/v1/roles               → master roles
+  GET  /api/v1/users               → master users
+  GET  /api/v1/sales               → master sales
+"""
+
+from fastapi import FastAPI, Depends, HTTPException, Query, status
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from pydantic import BaseModel
+from typing import Optional, List, Any
+from jose import JWTError, jwt
+from datetime import datetime, date, timedelta
+from decimal import Decimal
+import os
+import random
+import string
+
+from database_pg import (
+    get_conn, init_db, next_lead_id, next_fu_id,
+    hash_pw, ALL_MENUS, get_user_menus
+)
+
+# ── Konstanta ─────────────────────────────────────────────────────────────────
+SECRET_KEY  = os.getenv("CRM_JWT_SECRET", "crm-dcss-pkp-jwt-2026-super-secret-key")
+ALGORITHM   = "HS256"
+TOKEN_EXPIRE_HOURS = 24
+
+MONTHS_EN = ['January','February','March','April','May','June',
+             'July','August','September','October','November','December']
+
+STALE_HOT  = 7
+STALE_WARM = 14
+STALE_ANY  = 30
+
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+def _norm(d: dict) -> dict:
+    """Konversi datetime.date / Decimal ke tipe JSON-serializable."""
+    out = {}
+    for k, v in d.items():
+        if isinstance(v, (date, datetime)):
+            out[k] = v.isoformat()
+        elif isinstance(v, Decimal):
+            out[k] = float(v)
+        else:
+            out[k] = v
+    return out
+
+
+def compute_stale_flag(prioritas: str, days) -> str:
+    if days is None:
+        return "OK"
+    days = float(days)
+    if (prioritas or '').lower() == 'hot'  and days > STALE_HOT:
+        return "URGENT"
+    if (prioritas or '').lower() == 'warm' and days > STALE_WARM:
+        return "WARNING"
+    if days > STALE_ANY:
+        return "STALE"
+    return "OK"
+
+
+def auto_status_risk(revenue_target, actual_revenue, type_: str,
+                     tahun: int, target_month: str = None):
+    revenue_target = float(revenue_target or 0)
+    actual_revenue = float(actual_revenue or 0)
+    if not revenue_target or revenue_target <= 0:
+        return "Critical", "LOW"
+    ach = actual_revenue / revenue_target
+    today = date.today()
+    if today.year == tahun:
+        months_elapsed = today.month
+    elif today.year > tahun:
+        months_elapsed = 12
+    else:
+        months_elapsed = 0
+    pace = months_elapsed / 12
+
+    if pace == 0:
+        status = "Critical" if ach == 0 else "On Track"
+    elif ach >= max(pace * 0.9, 0.95):
+        status = "On Track"
+    elif ach >= pace * 0.5:
+        status = "At Risk"
+    else:
+        status = "Critical"
+    if ach >= 1.0:
+        status = "On Track"
+
+    type_lower = (type_ or '').lower()
+    gap = pace - ach
+    if 'termin' in type_lower:
+        risk = "HIGH" if actual_revenue == 0 else ("HIGH" if gap > 0.3 else "MEDIUM")
+    elif 'tahunan' in type_lower:
+        risk = "HIGH" if actual_revenue == 0 else ("MEDIUM" if gap > 0.2 else "LOW")
+    elif 'bulanan' in type_lower:
+        risk = "LOW" if ach >= 0.7 else ("MEDIUM" if ach >= 0.4 else "HIGH")
+    elif 'one time' in type_lower:
+        risk = "HIGH" if actual_revenue == 0 else "LOW"
+    else:
+        risk = "HIGH" if ach < 0.3 else ("MEDIUM" if ach < 0.7 else "LOW")
+    return status, risk
+
+
+def sync_project_status(project_id: str):
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute("SELECT * FROM revenue_projects WHERE project_id=%s", (project_id,))
+    p = c.fetchone()
+    if not p:
+        conn.close(); return
+    p = dict(p)
+    c.execute("SELECT COALESCE(SUM(paid_amount),0) as total FROM invoices WHERE project_id=%s", (project_id,))
+    actual = c.fetchone()['total']
+    st, rk = auto_status_risk(float(p['revenue_target'] or 0), float(actual or 0),
+                               p['type'], int(p.get('tahun', 2026) or 2026), p.get('target_month'))
+    c.execute("""UPDATE revenue_projects SET actual_revenue=%s, status=%s, risk_level=%s,
+        updated_at=NOW() WHERE project_id=%s""", (actual, st, rk, project_id))
+    conn.commit(); conn.close()
+
+
+def next_rev_id() -> str:
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute("SELECT project_id FROM revenue_projects ORDER BY id DESC LIMIT 1")
+    row = c.fetchone()
+    conn.close()
+    if row:
+        try:
+            num = int(row['project_id'].replace('REV-', '')) + 1
+        except:
+            num = 9000
+    else:
+        num = 1
+    return f"REV-{num:04d}"
+
+
+def get_sales_list():
+    """Ambil daftar nama sales dari tabel users (bukan tabel sales terpisah)."""
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute("SELECT u.nama FROM users u LEFT JOIN roles r ON u.role_id=r.id ORDER BY u.nama")
+    names = [r['nama'] for r in c.fetchall()]
+    conn.close()
+    return names
+
+
+# ── JWT helpers ───────────────────────────────────────────────────────────────
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
+
+
+def create_token(data: dict) -> str:
+    payload = data.copy()
+    payload["exp"] = datetime.utcnow() + timedelta(hours=TOKEN_EXPIRE_HOURS)
+    return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+
+
+def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Token tidak valid atau sudah kadaluarsa.",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id: int = payload.get("sub")
+        if user_id is None:
+            raise credentials_exception
+    except JWTError:
+        raise credentials_exception
+
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute("""SELECT u.*, r.nama as role_nama
+                 FROM users u LEFT JOIN roles r ON u.role_id = r.id
+                 WHERE u.id=%s AND u.is_active=1""", (int(user_id),))
+    row = c.fetchone()
+    conn.close()
+    if not row:
+        raise credentials_exception
+    return _norm(dict(row))
+
+
+def require_menu(menu_key: str):
+    """Dependency factory — pastikan user punya akses ke menu tertentu."""
+    def _check(user: dict = Depends(get_current_user)):
+        allowed = get_user_menus(user["role_id"])
+        if menu_key not in allowed:
+            raise HTTPException(status_code=403, detail=f"Akses ditolak: menu '{menu_key}'")
+        return user
+    return _check
+
+
+# ── App ───────────────────────────────────────────────────────────────────────
+
+app = FastAPI(
+    title="CRM Leads Tracker — REST API",
+    version="2.0.0",
+    description="REST API untuk CRM DCSS — dikonsumsi oleh Nuxt 3 frontend",
+    docs_url="/api/docs",
+    redoc_url="/api/redoc",
+    openapi_url="/api/openapi.json",
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:3000",   # Nuxt dev server
+        "http://localhost:3001",
+        "http://127.0.0.1:3000",
+        os.getenv("CRM_FRONTEND_URL", "http://localhost:3000"),
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+init_db()
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# AUTH
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+
+@app.post("/api/v1/auth/login", tags=["Auth"])
+def login(form: LoginRequest):
+    """Login → terima JWT token."""
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute("""SELECT u.*, r.nama as role_nama
+                 FROM users u LEFT JOIN roles r ON u.role_id = r.id
+                 WHERE u.email=%s AND u.password=%s AND u.is_active=1""",
+              (form.email, hash_pw(form.password)))
+    row = c.fetchone()
+    conn.close()
+    if not row:
+        raise HTTPException(status_code=401, detail="Email atau password salah.")
+    user = _norm(dict(row))
+    token = create_token({"sub": str(user["id"]), "email": user["email"],
+                          "role_id": user["role_id"]})
+    allowed_menus = list(get_user_menus(user["role_id"]))
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "expires_in": TOKEN_EXPIRE_HOURS * 3600,
+        "user": {
+            "id": user["id"], "nama": user["nama"], "email": user["email"],
+            "role_id": user["role_id"], "role_nama": user["role_nama"],
+            "allowed_menus": allowed_menus,
+        }
+    }
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: str
+
+class ResetPasswordRequest(BaseModel):
+    email: str
+    otp: str
+    new_password: str
+
+def _ensure_otp_table():
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS password_reset_otps (
+            id         SERIAL PRIMARY KEY,
+            email      VARCHAR(255) NOT NULL,
+            otp        VARCHAR(10)  NOT NULL,
+            expires_at TIMESTAMP    NOT NULL,
+            used       BOOLEAN      DEFAULT FALSE,
+            created_at TIMESTAMP    DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+_ensure_otp_table()
+
+@app.post("/api/v1/auth/forgot-password", tags=["Auth"])
+def forgot_password(req: ForgotPasswordRequest):
+    """Generate OTP reset password — OTP ditampilkan di response untuk diteruskan admin ke user."""
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute("SELECT id, email, nama FROM users WHERE email=%s AND is_active=1", (req.email,))
+    user = c.fetchone()
+    if not user:
+        # Respons sama agar tidak bisa dipakai untuk enumerasi email
+        conn.close()
+        return {"message": "Jika email terdaftar, OTP telah dikirim."}
+
+    otp = ''.join(random.choices(string.digits, k=6))
+    expires = datetime.utcnow() + timedelta(minutes=15)
+
+    # Hapus OTP lama untuk email ini
+    c.execute("DELETE FROM password_reset_otps WHERE email=%s", (req.email,))
+    c.execute(
+        "INSERT INTO password_reset_otps (email, otp, expires_at) VALUES (%s,%s,%s)",
+        (req.email, otp, expires)
+    )
+    conn.commit()
+    conn.close()
+
+    print(f"\n[RESET PASSWORD] Email: {req.email} | OTP: {otp} | Expires: {expires} WIB\n")
+    return {
+        "message": "Jika email terdaftar, OTP telah dikirim.",
+        "debug_otp": otp,  # Hanya untuk development — hapus di production
+    }
+
+
+@app.post("/api/v1/auth/reset-password", tags=["Auth"])
+def reset_password(req: ResetPasswordRequest):
+    """Reset password menggunakan OTP yang valid."""
+    if len(req.new_password) < 6:
+        raise HTTPException(status_code=422, detail="Password minimal 6 karakter.")
+
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute(
+        """SELECT id FROM password_reset_otps
+           WHERE email=%s AND otp=%s AND used=FALSE AND expires_at > NOW()""",
+        (req.email, req.otp)
+    )
+    row = c.fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(status_code=400, detail="OTP tidak valid atau sudah kadaluarsa.")
+
+    c.execute("UPDATE users SET password=%s WHERE email=%s", (hash_pw(req.new_password), req.email))
+    c.execute("UPDATE password_reset_otps SET used=TRUE WHERE id=%s", (row[0],))
+    conn.commit()
+    conn.close()
+    return {"message": "Password berhasil direset. Silakan login."}
+
+
+@app.get("/api/v1/auth/me", tags=["Auth"])
+def me(user: dict = Depends(get_current_user)):
+    """Info user yang sedang login + daftar menu yang diizinkan."""
+    allowed = list(get_user_menus(user["role_id"]))
+    nav_menus = [m for m in ALL_MENUS if m["key"] in allowed]
+    return {
+        "id": user["id"], "nama": user["nama"], "email": user["email"],
+        "role_id": user["role_id"], "role_nama": user["role_nama"],
+        "allowed_menus": allowed,
+        "nav_menus": nav_menus,
+    }
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+
+@app.put("/api/v1/auth/change-password", tags=["Auth"])
+def change_password(req: ChangePasswordRequest, user: dict = Depends(get_current_user)):
+    """Ganti password user yang sedang login."""
+    if len(req.new_password) < 6:
+        raise HTTPException(status_code=422, detail="Password baru minimal 6 karakter.")
+
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute("SELECT password FROM users WHERE id=%s", (user["id"],))
+    row = c.fetchone()
+    if not row or row["password"] != hash_pw(req.current_password):
+        conn.close()
+        raise HTTPException(status_code=400, detail="Password lama tidak sesuai.")
+
+    c.execute("UPDATE users SET password=%s WHERE id=%s", (hash_pw(req.new_password), user["id"]))
+    conn.commit()
+    conn.close()
+    return {"message": "Password berhasil diubah."}
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DASHBOARD
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@app.get("/api/v1/dashboard", tags=["Dashboard"])
+def dashboard(user: dict = Depends(require_menu("dashboard"))):
+    conn = get_conn()
+    c = conn.cursor()
+
+    c.execute("SELECT COUNT(*) as total FROM leads")
+    total = c.fetchone()["total"]
+
+    c.execute("SELECT stage, COUNT(*) as cnt, SUM(propose_value) as total_val, AVG(propose_value) as avg_val FROM leads GROUP BY stage")
+    by_stage = [_norm(dict(r)) for r in c.fetchall()]
+
+    c.execute("SELECT segmen, COUNT(*) as leads, SUM(propose_value) as propose_val, SUM(deal_value) as deal_val, SUM(CASE WHEN stage='Won' THEN 1 ELSE 0 END) as won FROM leads GROUP BY segmen")
+    by_segmen = [_norm(dict(r)) for r in c.fetchall()]
+
+    c.execute("SELECT COUNT(*) as cnt FROM leads WHERE stage='Won'");           won        = c.fetchone()["cnt"]
+    c.execute("SELECT COUNT(*) as cnt FROM leads WHERE stage='Lost'");          lost       = c.fetchone()["cnt"]
+    c.execute("SELECT COUNT(*) as cnt FROM leads WHERE stage='New'");           new        = c.fetchone()["cnt"]
+    c.execute("SELECT COUNT(*) as cnt FROM leads WHERE stage='In Progress'");   in_progress= c.fetchone()["cnt"]
+    c.execute("SELECT COUNT(*) as cnt FROM leads WHERE stage IN ('Proposal Sent','Negotiation')"); proposal = c.fetchone()["cnt"]
+    c.execute("SELECT COUNT(*) as cnt FROM leads WHERE next_fu_date <= CURRENT_DATE AND stage NOT IN ('Won','Lost')"); overdue = c.fetchone()["cnt"]
+    c.execute("SELECT SUM(deal_value) as total FROM leads WHERE stage='Won'");  total_deal = float(c.fetchone()["total"] or 0)
+    c.execute("SELECT SUM(propose_value) as total FROM leads WHERE stage NOT IN ('Won','Lost')"); total_pipeline = float(c.fetchone()["total"] or 0)
+
+    c.execute("""SELECT *,
+        COALESCE((CURRENT_DATE - last_fu_date)::integer,(CURRENT_DATE - tgl_masuk)::integer,999) as days_without_fu
+        FROM leads WHERE stage NOT IN ('Won','Lost') ORDER BY prioritas DESC, days_without_fu DESC""")
+    all_active = [_norm(dict(r)) for r in c.fetchall()]
+    for l in all_active:
+        l["stale_flag"] = compute_stale_flag(l["prioritas"], l["days_without_fu"])
+
+    conn.close()
+    return {
+        "total": total, "won": won, "lost": lost, "new": new,
+        "in_progress": in_progress, "proposal": proposal, "overdue": overdue,
+        "total_deal": total_deal, "total_pipeline": total_pipeline,
+        "by_stage": by_stage, "by_segmen": by_segmen,
+        "stale_urgent":  [l for l in all_active if l["stale_flag"] == "URGENT"],
+        "stale_warning": [l for l in all_active if l["stale_flag"] == "WARNING"],
+        "stale_stale":   [l for l in all_active if l["stale_flag"] == "STALE"],
+        "thresholds": {"hot": STALE_HOT, "warm": STALE_WARM, "any": STALE_ANY},
+    }
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PIPELINE
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class LeadCreate(BaseModel):
+    nama_company: str
+    product: str = ""
+    contact_person: str = ""
+    segmen: str = ""
+    sub_segmen: str = ""
+    source: str = ""
+    stage: str = "New"
+    prioritas: str = "Warm"
+    tgl_masuk: str = ""
+    propose_value: float = 0
+    deal_value: float = 0
+    probability: float = 0
+    exp_close_date: str = ""
+    sales_owner: str = ""
+    next_fu_date: str = ""
+    remarks: str = ""
+
+
+class LeadUpdate(LeadCreate):
+    pass
+
+
+@app.get("/api/v1/pipeline", tags=["Pipeline"])
+def pipeline_list(
+    stage: str = "", segmen: str = "", search: str = "", sales: str = "",
+    user: dict = Depends(require_menu("pipeline"))
+):
+    conn = get_conn()
+    c = conn.cursor()
+    query = """SELECT *,
+        COALESCE((CURRENT_DATE-last_fu_date)::integer,(CURRENT_DATE-tgl_masuk)::integer,999) as days_without_fu
+        FROM leads WHERE 1=1"""
+    params = []
+    if stage:  query += " AND stage=%s";       params.append(stage)
+    if segmen: query += " AND segmen=%s";      params.append(segmen)
+    if search: query += " AND (nama_company LIKE %s OR product LIKE %s OR contact_person LIKE %s)"; params += [f"%{search}%"]*3
+    if sales:  query += " AND sales_owner=%s"; params.append(sales)
+    c.execute(query + " ORDER BY id DESC", params)
+    leads = [_norm(dict(r)) for r in c.fetchall()]
+    for l in leads:
+        l["stale_flag"] = compute_stale_flag(l["prioritas"], l["days_without_fu"]) \
+                          if l["stage"] not in ("Won","Lost") else "OK"
+    conn.close()
+    return {"leads": leads, "total": len(leads), "sales_list": get_sales_list()}
+
+
+@app.post("/api/v1/pipeline", status_code=201, tags=["Pipeline"])
+def pipeline_create(payload: LeadCreate, user: dict = Depends(require_menu("pipeline"))):
+    conn = get_conn()
+    c = conn.cursor()
+    lid = next_lead_id()
+    pv = float(payload.propose_value or 0)
+    dv = float(payload.deal_value or 0)
+    prob = float(payload.probability or 0)
+    wv = dv * (prob/100) if dv else pv * (prob/100)
+    c.execute("""INSERT INTO leads
+        (lead_id,nama_company,product,contact_person,segmen,sub_segmen,source,stage,prioritas,
+         tgl_masuk,propose_value,deal_value,probability,exp_close_date,weighted_value,
+         sales_owner,next_fu_date,remarks)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+        (lid, payload.nama_company, payload.product, payload.contact_person,
+         payload.segmen, payload.sub_segmen, payload.source, payload.stage, payload.prioritas,
+         payload.tgl_masuk or str(date.today()), pv, dv, prob,
+         payload.exp_close_date or None, wv,
+         payload.sales_owner, payload.next_fu_date or None, payload.remarks))
+    conn.commit(); conn.close()
+    return {"message": "Lead berhasil dibuat.", "lead_id": lid}
+
+
+@app.get("/api/v1/pipeline/{lead_id}", tags=["Pipeline"])
+def pipeline_detail(lead_id: str, user: dict = Depends(require_menu("pipeline"))):
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute("SELECT * FROM leads WHERE lead_id=%s", (lead_id,))
+    row = c.fetchone()
+    if not row:
+        conn.close(); raise HTTPException(404, "Lead tidak ditemukan.")
+    lead = _norm(dict(row))
+    c.execute("SELECT * FROM follow_up_log WHERE lead_id=%s ORDER BY tgl_fu DESC", (lead_id,))
+    logs = [_norm(dict(r)) for r in c.fetchall()]
+    c.execute("SELECT * FROM contacts WHERE lead_id=%s", (lead_id,))
+    contacts = [_norm(dict(r)) for r in c.fetchall()]
+    conn.close()
+    return {"lead": lead, "fu_logs": logs, "contacts": contacts}
+
+
+@app.put("/api/v1/pipeline/{lead_id}", tags=["Pipeline"])
+def pipeline_update(lead_id: str, payload: LeadUpdate,
+                    user: dict = Depends(require_menu("pipeline"))):
+    pv = float(payload.propose_value or 0)
+    dv = float(payload.deal_value or 0)
+    prob = float(payload.probability or 0)
+    wv = dv * (prob/100) if dv else pv * (prob/100)
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute("""UPDATE leads SET
+        nama_company=%s,product=%s,contact_person=%s,segmen=%s,sub_segmen=%s,source=%s,
+        stage=%s,prioritas=%s,tgl_masuk=%s,propose_value=%s,deal_value=%s,probability=%s,
+        exp_close_date=%s,weighted_value=%s,sales_owner=%s,next_fu_date=%s,remarks=%s,
+        updated_at=NOW() WHERE lead_id=%s""",
+        (payload.nama_company, payload.product, payload.contact_person,
+         payload.segmen, payload.sub_segmen, payload.source,
+         payload.stage, payload.prioritas, payload.tgl_masuk or None,
+         pv, dv, prob, payload.exp_close_date or None, wv,
+         payload.sales_owner, payload.next_fu_date or None, payload.remarks, lead_id))
+    conn.commit(); conn.close()
+    return {"message": "Lead berhasil diperbarui.", "lead_id": lead_id}
+
+
+@app.delete("/api/v1/pipeline/{lead_id}", tags=["Pipeline"])
+def pipeline_delete(lead_id: str, user: dict = Depends(require_menu("pipeline"))):
+    conn = get_conn()
+    c = conn.cursor()
+    # Hapus records terkait terlebih dahulu (FK constraint)
+    c.execute("DELETE FROM follow_up_log WHERE lead_id=%s", (lead_id,))
+    c.execute("DELETE FROM contacts WHERE lead_id=%s", (lead_id,))
+    c.execute("DELETE FROM leads WHERE lead_id=%s", (lead_id,))
+    conn.commit(); conn.close()
+    return {"message": "Lead berhasil dihapus.", "lead_id": lead_id}
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# TODAY / ACTIVITY
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@app.get("/api/v1/today", tags=["Activity"])
+def today_dashboard(user: dict = Depends(require_menu("today"))):
+    conn = get_conn()
+    c = conn.cursor()
+    today_str = str(date.today())
+
+    c.execute("""SELECT l.*, (CURRENT_DATE - l.next_fu_date)::integer as days_late
+        FROM leads l WHERE l.next_fu_date < %s AND l.stage NOT IN ('Won','Lost')
+        AND l.next_fu_date IS NOT NULL ORDER BY l.next_fu_date ASC""", (today_str,))
+    overdue = [_norm(dict(r)) for r in c.fetchall()]
+
+    c.execute("""SELECT l.* FROM leads l WHERE l.next_fu_date = %s AND l.stage NOT IN ('Won','Lost')
+        ORDER BY l.prioritas DESC""", (today_str,))
+    due_today = [_norm(dict(r)) for r in c.fetchall()]
+
+    c.execute("""SELECT l.*, (l.next_fu_date - CURRENT_DATE)::integer as days_until
+        FROM leads l WHERE l.next_fu_date > %s AND l.next_fu_date <= (CURRENT_DATE + INTERVAL '7 days')
+        AND l.stage NOT IN ('Won','Lost') ORDER BY l.next_fu_date ASC""", (today_str,))
+    upcoming = [_norm(dict(r)) for r in c.fetchall()]
+
+    c.execute("""SELECT * FROM leads WHERE next_fu_date IS NULL
+        AND stage NOT IN ('Won','Lost') ORDER BY prioritas DESC, propose_value DESC""")
+    unscheduled = [_norm(dict(r)) for r in c.fetchall()]
+
+    c.execute("SELECT COUNT(*) as cnt FROM leads WHERE stage NOT IN ('Won','Lost')")
+    total_active = c.fetchone()["cnt"]
+    c.execute("SELECT COUNT(*) as cnt FROM follow_up_log WHERE tgl_fu = %s", (today_str,))
+    fu_done_today = c.fetchone()["cnt"]
+
+    c.execute("""SELECT *,
+        COALESCE((CURRENT_DATE-last_fu_date)::integer,(CURRENT_DATE-tgl_masuk)::integer,999) as days_without_fu
+        FROM leads WHERE stage NOT IN ('Won','Lost') AND next_fu_date IS NULL
+        ORDER BY CASE prioritas WHEN 'Hot' THEN 1 WHEN 'Warm' THEN 2 ELSE 3 END, days_without_fu DESC""")
+    stale_raw = [_norm(dict(r)) for r in c.fetchall()]
+    for l in stale_raw:
+        l["stale_flag"] = compute_stale_flag(l["prioritas"], l["days_without_fu"])
+
+    conn.close()
+    return {
+        "today": today_str,
+        "overdue": overdue, "due_today": due_today,
+        "upcoming": upcoming, "unscheduled": unscheduled,
+        "total_active": total_active, "fu_done_today": fu_done_today,
+        "stale_urgent":  [l for l in stale_raw if l["stale_flag"] == "URGENT"],
+        "stale_warning": [l for l in stale_raw if l["stale_flag"] == "WARNING"],
+        "stale_stale":   [l for l in stale_raw if l["stale_flag"] == "STALE"],
+    }
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# FU SCHEDULE
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@app.get("/api/v1/schedule", tags=["Activity"])
+def fu_schedule(user: dict = Depends(require_menu("schedule"))):
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute("""SELECT l.*,
+        CASE WHEN l.next_fu_date < CURRENT_DATE THEN 'Overdue'
+             WHEN l.next_fu_date = CURRENT_DATE THEN 'Today'
+             ELSE 'Upcoming' END as fu_status
+        FROM leads l WHERE l.stage NOT IN ('Won','Lost') AND l.next_fu_date IS NOT NULL
+        ORDER BY l.next_fu_date ASC""")
+    schedule = [_norm(dict(r)) for r in c.fetchall()]
+    conn.close()
+    return {"schedule": schedule}
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# FOLLOW-UP LOG
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class FollowUpCreate(BaseModel):
+    lead_id: str
+    tgl_fu: str
+    metode_fu: str = ""
+    kontak: str = ""
+    hasil_fu: str = ""
+    catatan_fu: str = ""
+    stage_saat_fu: str = ""
+    next_action: str = ""
+    tgl_fu_berikut: str = ""
+    sales_owner: str = ""
+    status: str = "Done"
+
+
+@app.get("/api/v1/followup", tags=["Activity"])
+def followup_list(
+    lead_id: str = "", search: str = "",
+    user: dict = Depends(require_menu("followup"))
+):
+    conn = get_conn()
+    c = conn.cursor()
+    q = "SELECT * FROM follow_up_log WHERE 1=1"
+    params = []
+    if lead_id: q += " AND lead_id=%s"; params.append(lead_id)
+    if search:  q += " AND (nama_company LIKE %s OR catatan_fu LIKE %s OR kontak LIKE %s)"; params += [f"%{search}%"]*3
+    c.execute(q + " ORDER BY tgl_fu DESC", params)
+    logs = [_norm(dict(r)) for r in c.fetchall()]
+    c.execute("SELECT lead_id, nama_company FROM leads ORDER BY nama_company")
+    leads = [_norm(dict(r)) for r in c.fetchall()]
+    conn.close()
+    return {"logs": logs, "leads": leads}
+
+
+@app.post("/api/v1/followup", status_code=201, tags=["Activity"])
+def followup_create(payload: FollowUpCreate, user: dict = Depends(require_menu("followup"))):
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute("SELECT nama_company FROM leads WHERE lead_id=%s", (payload.lead_id,))
+    row = c.fetchone()
+    nama = row["nama_company"] if row else ""
+    fid = next_fu_id()
+    c.execute("""INSERT INTO follow_up_log
+        (fu_id,lead_id,tgl_fu,nama_company,sales_owner,metode_fu,kontak,hasil_fu,
+         catatan_fu,stage_saat_fu,next_action,tgl_fu_berikut,status)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+        (fid, payload.lead_id, payload.tgl_fu, nama, payload.sales_owner,
+         payload.metode_fu, payload.kontak, payload.hasil_fu, payload.catatan_fu,
+         payload.stage_saat_fu, payload.next_action,
+         payload.tgl_fu_berikut or None, payload.status))
+    c.execute("""UPDATE leads SET last_fu_date=%s, last_fu_notes=%s, fu_count=fu_count+1,
+        next_fu_date=%s, updated_at=NOW() WHERE lead_id=%s""",
+        (payload.tgl_fu, payload.catatan_fu, payload.tgl_fu_berikut or None, payload.lead_id))
+    conn.commit(); conn.close()
+    return {"message": "Follow-up berhasil dicatat.", "fu_id": fid}
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# WIN-LOSS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@app.get("/api/v1/winloss", tags=["Pipeline"])
+def winloss(user: dict = Depends(require_menu("winloss"))):
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute("SELECT * FROM win_loss ORDER BY id DESC")
+    records = [_norm(dict(r)) for r in c.fetchall()]
+    c.execute("SELECT COUNT(*) as cnt, COALESCE(SUM(deal_value),0) as total FROM win_loss WHERE hasil='Won'")
+    won_stats = _norm(dict(c.fetchone()))
+    c.execute("SELECT COUNT(*) as cnt FROM win_loss WHERE hasil='Lost'")
+    lost_stats = _norm(dict(c.fetchone()))
+    conn.close()
+    return {"records": records, "won_stats": won_stats, "lost_stats": lost_stats}
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# CONTACTS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class ContactCreate(BaseModel):
+    lead_id: str
+    nama_contact: str
+    jabatan: str = ""; dept: str = ""; role: str = ""
+    no_hp: str = ""; email: str = ""; telepon: str = ""
+    linkedin: str = ""; preferensi_kontak: str = ""; catatan: str = ""
+
+
+@app.get("/api/v1/contacts", tags=["Contacts"])
+def contacts_list(search: str = "", user: dict = Depends(require_menu("contacts"))):
+    conn = get_conn()
+    c = conn.cursor()
+    if search:
+        c.execute("SELECT * FROM contacts WHERE nama_contact LIKE %s OR nama_company LIKE %s OR no_hp LIKE %s",
+                  (f"%{search}%",)*3)
+    else:
+        c.execute("SELECT * FROM contacts ORDER BY nama_company")
+    ct = [_norm(dict(r)) for r in c.fetchall()]
+    conn.close()
+    return {"contacts": ct, "total": len(ct)}
+
+
+@app.post("/api/v1/contacts", status_code=201, tags=["Contacts"])
+def contact_create(payload: ContactCreate, user: dict = Depends(require_menu("contacts"))):
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute("SELECT nama_company FROM leads WHERE lead_id=%s", (payload.lead_id,))
+    row = c.fetchone()
+    nama_co = row["nama_company"] if row else ""
+    c.execute("""INSERT INTO contacts
+        (lead_id,nama_company,nama_contact,jabatan,dept,role,no_hp,email,telepon,linkedin,preferensi_kontak,catatan)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+        (payload.lead_id, nama_co, payload.nama_contact, payload.jabatan, payload.dept,
+         payload.role, payload.no_hp, payload.email, payload.telepon,
+         payload.linkedin, payload.preferensi_kontak, payload.catatan))
+    conn.commit(); conn.close()
+    return {"message": "Kontak berhasil ditambahkan."}
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PIPELINE INSIGHTS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@app.get("/api/v1/insights", tags=["Pipeline"])
+def insights(user: dict = Depends(require_menu("insights"))):
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute("SELECT * FROM leads")
+    all_leads = [_norm(dict(r)) for r in c.fetchall()]
+    conn.close()
+
+    from collections import defaultdict
+    total = len(all_leads)
+    active       = [l for l in all_leads if l["stage"] not in ("Won","Lost")]
+    won_leads    = [l for l in all_leads if l["stage"] == "Won"]
+    lost_leads   = [l for l in all_leads if l["stage"] == "Lost"]
+    onhold_leads = [l for l in all_leads if l["stage"] == "On Hold"]
+
+    total_propose = sum(l["propose_value"] or 0 for l in all_leads)
+    total_deal    = sum(l["deal_value"] or 0 for l in won_leads)
+    onhold_val    = sum(l["propose_value"] or 0 for l in onhold_leads)
+    lost_val      = sum(l["propose_value"] or 0 for l in lost_leads)
+    inactive      = len(onhold_leads) + len(lost_leads)
+    inactive_pct  = round(inactive / total * 100) if total else 0
+    won_pct       = round(len(won_leads) / total * 100) if total else 0
+
+    stage_order  = ["New","In Progress","Demo Scheduled","Proposal Sent","Negotiation","Won","On Hold","Lost"]
+    stage_colors = {"New":"#3b82f6","In Progress":"#eab308","Demo Scheduled":"#a855f7",
+                    "Proposal Sent":"#f97316","Negotiation":"#f59e0b","Won":"#22c55e",
+                    "On Hold":"#9ca3af","Lost":"#ef4444"}
+    stage_counts = defaultdict(lambda: {"cnt": 0, "val": 0})
+    for l in all_leads:
+        stage_counts[l["stage"]]["cnt"] += 1
+        stage_counts[l["stage"]]["val"] += l["propose_value"] or 0
+    stage_data = [
+        {"stage": s, "cnt": stage_counts[s]["cnt"], "val": stage_counts[s]["val"],
+         "pct": round(stage_counts[s]["cnt"] / total * 100) if total else 0,
+         "color": stage_colors.get(s, "#9ca3af")}
+        for s in stage_order if stage_counts[s]["cnt"] > 0
+    ]
+
+    win_rate = round(len(won_leads) / total * 100) if total else 0
+    no_fu_active = len([l for l in active if not l.get("next_fu_date")])
+    multifinance_conv = round(
+        sum(l["deal_value"] or 0 for l in all_leads if l["segmen"] == "Multifinance") /
+        max(sum(l["propose_value"] or 0 for l in all_leads if l["segmen"] == "Multifinance"), 1) * 100, 1
+    )
+
+    scorecard = [
+        {"label": "Win Rate", "value": f"{win_rate}%",
+         "status": "Kritis — Target min. 20%" if win_rate < 15 else "Perlu ditingkatkan",
+         "level": "red" if win_rate < 15 else "yellow"},
+        {"label": "Leads Tanpa Jadwal FU", "value": str(no_fu_active),
+         "status": f"{no_fu_active} dari {len(active)} leads aktif",
+         "level": "red" if no_fu_active > 5 else "yellow"},
+        {"label": "Konversi Multifinance", "value": f"{multifinance_conv}%",
+         "status": "ROI sangat rendah" if multifinance_conv < 5 else "Perlu ditingkatkan",
+         "level": "red" if multifinance_conv < 5 else "yellow"},
+        {"label": "Pipeline Tidak Aktif", "value": f"{inactive_pct}%",
+         "status": f"{inactive} leads On Hold + Lost",
+         "level": "red" if inactive_pct > 35 else "yellow"},
+    ]
+
+    return {
+        "total": total, "total_propose": total_propose, "total_deal": total_deal,
+        "onhold_val": onhold_val, "onhold_count": len(onhold_leads),
+        "lost_val": lost_val, "lost_count": len(lost_leads),
+        "inactive": inactive, "inactive_pct": inactive_pct,
+        "won_count": len(won_leads), "won_pct": won_pct,
+        "stage_data": stage_data, "scorecard": scorecard,
+    }
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# REVENUE — SUMMARY & INSIGHTS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@app.get("/api/v1/revenue/summary", tags=["Revenue"])
+def revenue_summary_api(
+    tahun: int = Query(0),
+    user: dict = Depends(require_menu("rev_dashboard"))
+):
+    cur_year = tahun if tahun else date.today().year
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute("SELECT SUM(revenue_target) t, SUM(actual_revenue) a FROM revenue_projects WHERE is_active=1 AND tahun=%s", (cur_year,))
+    s = _norm(dict(c.fetchone())); tt = s['t'] or 0; ta = s['a'] or 0
+    ach_pct = round(float(ta or 0)/float(tt or 1)*100,1) if tt else 0
+
+    c.execute("SELECT SUM(revenue_target) t, SUM(actual_revenue) a FROM revenue_projects WHERE kategori='Recurring' AND is_active=1 AND tahun=%s", (cur_year,))
+    r = _norm(dict(c.fetchone())); rec_target = float(r['t'] or 0); rec_actual = float(r['a'] or 0)
+    c.execute("SELECT SUM(revenue_target) t, SUM(actual_revenue) a FROM revenue_projects WHERE kategori='Project' AND is_active=1 AND tahun=%s", (cur_year,))
+    r = _norm(dict(c.fetchone())); prj_target = float(r['t'] or 0); prj_actual = float(r['a'] or 0)
+    c.execute("SELECT status, COUNT(*) cnt FROM revenue_projects WHERE is_active=1 AND tahun=%s GROUP BY status", (cur_year,))
+    by_status = {r['status']: r['cnt'] for r in c.fetchall()}
+    c.execute("SELECT COUNT(*) cnt FROM revenue_projects WHERE is_active=1 AND tahun=%s", (cur_year,))
+    total_projects = c.fetchone()['cnt']
+
+    c.execute("""SELECT m.month_num, m.month_name, SUM(m.target) total_target, SUM(m.actual) total_actual
+        FROM revenue_monthly m JOIN revenue_projects p ON m.project_id=p.project_id
+        WHERE p.is_active=1 AND p.tahun=%s GROUP BY m.month_num, m.month_name ORDER BY m.month_num""", (cur_year,))
+    monthly_trend = [_norm(dict(r)) for r in c.fetchall()]
+
+    c.execute("""SELECT * FROM revenue_projects WHERE status IN ('Critical','At Risk') AND is_active=1 AND tahun=%s
+        ORDER BY risk_level DESC, revenue_target DESC LIMIT 10""", (cur_year,))
+    critical = [_norm(dict(r)) for r in c.fetchall()]
+
+    c.execute("SELECT owner, COUNT(*) cnt, SUM(revenue_target) target, SUM(actual_revenue) actual FROM revenue_projects WHERE is_active=1 AND tahun=%s GROUP BY owner", (cur_year,))
+    by_owner = [_norm(dict(r)) for r in c.fetchall()]
+
+    c.execute("SELECT DISTINCT tahun FROM revenue_projects ORDER BY tahun DESC")
+    years = [r['tahun'] for r in c.fetchall() if r['tahun']]
+    conn.close()
+
+    return {
+        "cur_year": cur_year, "years": years,
+        "total_target": float(tt or 0), "total_actual": float(ta or 0), "ach_pct": ach_pct,
+        "rec_target": rec_target, "rec_actual": rec_actual,
+        "prj_target": prj_target, "prj_actual": prj_actual,
+        "by_status": by_status, "total_projects": total_projects,
+        "monthly_trend": monthly_trend, "critical": critical, "by_owner": by_owner,
+    }
+
+
+@app.get("/api/v1/revenue/insights", tags=["Revenue"])
+def revenue_insights_api(tahun: int = Query(0), user: dict = Depends(require_menu("rev_dashboard"))):
+    cur_year = tahun if tahun else date.today().year
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute("SELECT DISTINCT tahun FROM revenue_projects ORDER BY tahun DESC")
+    years = [r['tahun'] for r in c.fetchall() if r['tahun']]
+
+    c.execute("SELECT SUM(revenue_target) t, SUM(actual_revenue) a FROM revenue_projects WHERE is_active=1 AND tahun=%s", (cur_year,))
+    s = _norm(dict(c.fetchone())); total_target = float(s['t'] or 0); total_actual = float(s['a'] or 0)
+    ach_pct = round(total_actual / max(total_target, 1) * 100, 1)
+    gap = total_target - total_actual
+
+    c.execute("SELECT kategori, SUM(revenue_target) t, SUM(actual_revenue) a FROM revenue_projects WHERE is_active=1 AND tahun=%s GROUP BY kategori", (cur_year,))
+    by_kat = {r['kategori']: dict(r) for r in c.fetchall()}
+    project_target   = float(by_kat.get('Project',   {}).get('t', 0) or 0)
+    project_actual   = float(by_kat.get('Project',   {}).get('a', 0) or 0)
+    recurring_target = float(by_kat.get('Recurring', {}).get('t', 0) or 0)
+    recurring_actual = float(by_kat.get('Recurring', {}).get('a', 0) or 0)
+    project_ach   = round(project_actual   / max(project_target,   1) * 100, 1)
+    recurring_ach = round(recurring_actual / max(recurring_target, 1) * 100, 1)
+
+    c.execute("SELECT status, COUNT(*) cnt FROM revenue_projects WHERE is_active=1 AND tahun=%s GROUP BY status", (cur_year,))
+    by_status = {r['status']: r['cnt'] for r in c.fetchall()}
+    critical_count = by_status.get('Critical', 0)
+    c.execute("SELECT COUNT(*) cnt FROM revenue_projects WHERE is_active=1 AND tahun=%s", (cur_year,))
+    total_projects = c.fetchone()['cnt']
+
+    c.execute("SELECT owner, SUM(revenue_target) t, SUM(actual_revenue) a FROM revenue_projects WHERE is_active=1 AND tahun=%s GROUP BY owner", (cur_year,))
+    by_owner = {r['owner']: dict(r) for r in c.fetchall()}
+    ama = by_owner.get('AMA', {}); eiw = by_owner.get('EIW', {})
+    ama_target = float(ama.get('t', 0) or 0); ama_actual = float(ama.get('a', 0) or 0)
+    eiw_target = float(eiw.get('t', 0) or 0); eiw_actual = float(eiw.get('a', 0) or 0)
+    ama_ach = round(ama_actual / max(ama_target, 1) * 100, 1)
+    eiw_ach = round(eiw_actual / max(eiw_target, 1) * 100, 1)
+
+    c.execute("""SELECT project_id, product, client, owner, revenue_target, type, risk_level, kategori
+        FROM revenue_projects WHERE actual_revenue=0 AND revenue_target>0 AND is_active=1 AND tahun=%s
+        ORDER BY revenue_target DESC""", (cur_year,))
+    zero_projects = [_norm(dict(r)) for r in c.fetchall()]
+
+    c.execute("""SELECT COUNT(*) cnt, SUM(invoice_amount - paid_amount) outstanding
+        FROM invoices WHERE paid_amount < invoice_amount AND tahun=%s""", (cur_year,))
+    inv_row = _norm(dict(c.fetchone()))
+
+    c.execute("""SELECT m.month_name, m.month_num, SUM(m.target) target,
+        COALESCE((SELECT SUM(i.paid_amount) FROM invoices i
+            JOIN revenue_projects rp ON i.project_id=rp.project_id
+            WHERE rp.is_active=1 AND i.tahun=%s AND i.period=m.month_name), 0) as actual
+        FROM revenue_monthly m JOIN revenue_projects p ON m.project_id=p.project_id
+        WHERE p.is_active=1 AND p.tahun=%s GROUP BY m.month_num, m.month_name ORDER BY m.month_num""",
+        (cur_year, cur_year))
+    monthly_data = [_norm(dict(r)) for r in c.fetchall()]
+    conn.close()
+
+    return {
+        "cur_year": cur_year, "years": years,
+        "total_target": total_target, "total_actual": total_actual, "ach_pct": ach_pct, "gap": gap,
+        "project_target": project_target, "project_actual": project_actual, "project_ach": project_ach,
+        "recurring_target": recurring_target, "recurring_actual": recurring_actual, "recurring_ach": recurring_ach,
+        "critical_count": critical_count, "total_projects": total_projects,
+        "ama_target": ama_target, "ama_actual": ama_actual, "ama_ach": ama_ach,
+        "eiw_target": eiw_target, "eiw_actual": eiw_actual, "eiw_ach": eiw_ach,
+        "zero_projects": zero_projects, "zero_count": len(zero_projects),
+        "zero_actual_value": sum(float(p['revenue_target'] or 0) for p in zero_projects),
+        "outstanding_invoices": inv_row.get('cnt') or 0,
+        "outstanding_amount": float(inv_row.get('outstanding') or 0),
+        "monthly_data": monthly_data,
+    }
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# REVENUE TRACKER (Projects)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class ProjectCreate(BaseModel):
+    lob: str = "DCSS"
+    owner: str = ""
+    product: str = ""
+    client: str = ""
+    kategori: str = "Project"
+    type: str = "One Time"
+    tahun: int = 0
+    revenue_target: float = 0
+    notes: str = ""
+    from_lead_id: str = ""
+
+
+@app.get("/api/v1/revenue/projects", tags=["Revenue"])
+def revenue_tracker_api(
+    owner: str = "", kategori: str = "", status: str = "",
+    search: str = "", tahun: int = Query(0), month: int = Query(0),
+    user: dict = Depends(require_menu("rev_tracker"))
+):
+    cur_year  = tahun if tahun else date.today().year
+    cur_month = month if month else 0
+    conn = get_conn()
+    c = conn.cursor()
+
+    if cur_month:
+        month_name_en = MONTHS_EN[cur_month - 1]
+        inv_sub  = f"COALESCE((SELECT SUM(paid_amount) FROM invoices i WHERE i.project_id=p.project_id AND i.tahun={cur_year} AND i.period='{month_name_en}'),0)"
+        inv_cnt  = f"COALESCE((SELECT COUNT(*) FROM invoices i WHERE i.project_id=p.project_id AND i.tahun={cur_year} AND i.period='{month_name_en}'),0)"
+    else:
+        inv_sub  = "COALESCE((SELECT SUM(paid_amount) FROM invoices i WHERE i.project_id=p.project_id),0)"
+        inv_cnt  = "COALESCE((SELECT COUNT(*) FROM invoices i WHERE i.project_id=p.project_id),0)"
+
+    q = f"""SELECT p.*,
+        {inv_sub} as invoice_actual,
+        {inv_cnt} as invoice_count,
+        CASE WHEN p.revenue_target > 0 THEN CAST({inv_sub} AS FLOAT) / p.revenue_target ELSE 0 END as achievement_pct
+        FROM revenue_projects p WHERE p.is_active=1 AND p.tahun=%s"""
+    params = [cur_year]
+    if owner:    q += " AND p.owner=%s"; params.append(owner)
+    if kategori: q += " AND p.kategori=%s"; params.append(kategori)
+    if status:   q += " AND p.status=%s"; params.append(status)
+    if search:   q += " AND (p.product LIKE %s OR p.client LIKE %s)"; params += [f"%{search}%"]*2
+    c.execute(q + " ORDER BY CAST(REPLACE(p.project_id,'REV-','') AS INTEGER)", params)
+    projects = [_norm(dict(r)) for r in c.fetchall()]
+
+    c.execute("SELECT DISTINCT owner FROM revenue_projects WHERE owner IS NOT NULL ORDER BY owner")
+    owners = [r['owner'] for r in c.fetchall()]
+    c.execute("SELECT DISTINCT tahun FROM revenue_projects ORDER BY tahun DESC")
+    years  = [r['tahun'] for r in c.fetchall() if r['tahun']]
+
+    # Summary totals
+    if cur_month:
+        c.execute("""SELECT COALESCE(SUM(i.paid_amount),0) a FROM invoices i
+            JOIN revenue_projects p ON i.project_id=p.project_id
+            WHERE p.is_active=1 AND i.tahun=%s AND i.period=%s""", (cur_year, MONTHS_EN[cur_month-1]))
+        ta = float(c.fetchone()['a'] or 0)
+    else:
+        c.execute("SELECT COALESCE(SUM(actual_revenue),0) a FROM revenue_projects WHERE is_active=1 AND tahun=%s", (cur_year,))
+        ta = float(c.fetchone()['a'] or 0)
+    c.execute("SELECT COALESCE(SUM(revenue_target),0) t FROM revenue_projects WHERE is_active=1 AND tahun=%s", (cur_year,))
+    tt = float(c.fetchone()['t'] or 0)
+    conn.close()
+
+    return {
+        "projects": projects, "owners": owners, "years": years,
+        "cur_year": cur_year, "cur_month": cur_month,
+        "total_target": tt, "total_actual": ta,
+        "ach_pct": round(ta / max(tt, 1) * 100, 1) if tt else 0,
+        "total_projects": len(projects),
+        "months": [{"num": i+1, "name": m} for i, m in enumerate(MONTHS_EN)],
+    }
+
+
+@app.post("/api/v1/revenue/projects", status_code=201, tags=["Revenue"])
+def project_create(payload: ProjectCreate, user: dict = Depends(require_menu("rev_tracker"))):
+    yr = payload.tahun if payload.tahun else date.today().year
+    pid = next_rev_id()
+    target = float(payload.revenue_target or 0)
+    st, rk = auto_status_risk(target, 0.0, payload.type, yr)
+    conn = get_conn()
+    c = conn.cursor()
+    notes_txt = payload.notes
+    if payload.from_lead_id:
+        notes_txt = f"Dari Pipeline CRM: {payload.from_lead_id}. {notes_txt}"
+    c.execute("""INSERT INTO revenue_projects
+        (project_id,lob,owner,product,client,kategori,type,tahun,
+         revenue_target,actual_revenue,status,risk_level,notes)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+        ON CONFLICT (project_id) DO NOTHING""",
+        (pid, payload.lob, payload.owner, payload.product, payload.client,
+         payload.kategori, payload.type, yr, target, 0, st, rk, notes_txt))
+    conn.commit(); conn.close()
+    return {"message": "Proyek revenue berhasil dibuat.", "project_id": pid}
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# REVENUE MONTHLY
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@app.get("/api/v1/revenue/monthly", tags=["Revenue"])
+def revenue_monthly_api(
+    month: int = Query(0), tahun: int = Query(0),
+    owner: str = "", kategori: str = "",
+    user: dict = Depends(require_menu("rev_monthly"))
+):
+    cur_year  = tahun if tahun else date.today().year
+    cur_month = month if month else date.today().month
+    conn = get_conn()
+    c = conn.cursor()
+
+    q = """SELECT p.project_id, p.product, p.client, p.owner, p.kategori,
+               p.revenue_target, p.status, p.risk_level,
+               m.month_num, m.month_name, m.target,
+               COALESCE((SELECT SUM(i.paid_amount) FROM invoices i
+                         WHERE i.project_id=p.project_id AND i.tahun=%s AND i.period=m.month_name), 0) as actual,
+               m.status as month_status
+           FROM revenue_monthly m
+           JOIN revenue_projects p ON m.project_id=p.project_id
+           WHERE m.month_num=%s AND p.is_active=1 AND p.tahun=%s"""
+    params = [cur_year, cur_month, cur_year]
+    if owner:    q += " AND p.owner=%s"; params.append(owner)
+    if kategori: q += " AND p.kategori=%s"; params.append(kategori)
+    c.execute(q + " ORDER BY CAST(REPLACE(p.project_id,'REV-','') AS INTEGER)", params)
+    rows = [_norm(dict(r)) for r in c.fetchall()]
+
+    c.execute("""SELECT SUM(m.target) t FROM revenue_monthly m
+        JOIN revenue_projects p ON m.project_id=p.project_id
+        WHERE m.month_num=%s AND p.is_active=1 AND p.tahun=%s""", (cur_month, cur_year))
+    month_target = float((c.fetchone()['t'] or 0))
+
+    c.execute("SELECT COALESCE(SUM(paid_amount),0) inv_actual FROM invoices WHERE tahun=%s AND period=%s",
+              (cur_year, MONTHS_EN[cur_month-1]))
+    month_actual = float(c.fetchone()['inv_actual'] or 0)
+
+    c.execute("SELECT DISTINCT owner FROM revenue_projects WHERE owner IS NOT NULL ORDER BY owner")
+    owners = [r['owner'] for r in c.fetchall()]
+    c.execute("SELECT DISTINCT tahun FROM revenue_projects ORDER BY tahun DESC")
+    years  = [r['tahun'] for r in c.fetchall() if r['tahun']]
+    conn.close()
+
+    return {
+        "rows": rows, "cur_month": cur_month, "cur_year": cur_year,
+        "month_name": MONTHS_EN[cur_month-1],
+        "month_target": month_target, "month_actual": month_actual,
+        "owners": owners, "years": years,
+        "months": [{"num": i+1, "name": m} for i, m in enumerate(MONTHS_EN)],
+    }
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# INVOICES
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class InvoiceCreate(BaseModel):
+    project_id: str = ""
+    client: str = ""
+    product: str = ""
+    owner: str = ""
+    invoice_no: str = ""
+    invoice_date: str = ""
+    period: str = ""
+    invoice_amount: float = 0
+    paid_amount: float = 0
+    paid_date: str = ""
+    notes: str = ""
+    tahun: int = 0
+
+
+class InvoicePay(BaseModel):
+    paid_amount: float
+    paid_date: str = ""
+
+
+@app.get("/api/v1/revenue/invoices", tags=["Revenue"])
+def invoice_list(
+    period: str = "", status: str = "", search: str = "",
+    tahun: int = Query(0), project_id: str = "",
+    user: dict = Depends(require_menu("rev_invoice"))
+):
+    cur_year = tahun if tahun else date.today().year
+    conn = get_conn()
+    c = conn.cursor()
+    q = "SELECT i.*, p.product as proj_product, p.client as proj_client FROM invoices i LEFT JOIN revenue_projects p ON i.project_id=p.project_id WHERE i.tahun=%s"
+    params = [cur_year]
+    if period:     q += " AND i.period=%s"; params.append(period)
+    if project_id: q += " AND i.project_id=%s"; params.append(project_id)
+    if status == 'Lunas':   q += " AND i.paid_amount >= i.invoice_amount AND i.invoice_amount > 0"
+    elif status == 'Belum': q += " AND (i.paid_amount < i.invoice_amount)"
+    if search: q += " AND (i.client LIKE %s OR i.product LIKE %s OR i.invoice_no LIKE %s)"; params += [f"%{search}%"]*3
+    c.execute(q + " ORDER BY i.invoice_date DESC", params)
+    invoices = [_norm(dict(r)) for r in c.fetchall()]
+    for inv in invoices:
+        if (inv['paid_amount'] or 0) >= (inv['invoice_amount'] or 0) and (inv['invoice_amount'] or 0) > 0:
+            inv['display_status'] = 'Lunas'
+        elif not inv['paid_date']:
+            inv['display_status'] = 'Belum Dibayar'
+        else:
+            inv['display_status'] = 'Partial'
+
+    c.execute("SELECT SUM(invoice_amount) t, SUM(paid_amount) p FROM invoices WHERE tahun=%s", (cur_year,))
+    totals = _norm(dict(c.fetchone()))
+    c.execute("SELECT DISTINCT period FROM invoices WHERE period IS NOT NULL ORDER BY period")
+    periods = [r['period'] for r in c.fetchall()]
+    c.execute("SELECT project_id, product, client FROM revenue_projects WHERE is_active=1 ORDER BY project_id")
+    rev_projects = [_norm(dict(r)) for r in c.fetchall()]
+    c.execute("SELECT DISTINCT tahun FROM invoices ORDER BY tahun DESC")
+    years = [r['tahun'] for r in c.fetchall() if r['tahun']]
+    conn.close()
+
+    return {
+        "invoices": invoices, "periods": periods, "rev_projects": rev_projects,
+        "years": years, "cur_year": cur_year,
+        "total_invoice": float(totals['t'] or 0), "total_paid": float(totals['p'] or 0),
+    }
+
+
+@app.post("/api/v1/revenue/invoices", status_code=201, tags=["Revenue"])
+def invoice_create(payload: InvoiceCreate, user: dict = Depends(require_menu("rev_invoice"))):
+    conn = get_conn()
+    c = conn.cursor()
+    yr = payload.tahun if payload.tahun else date.today().year
+    product = payload.product; client = payload.client; owner = payload.owner
+    if payload.project_id:
+        c.execute("SELECT product, client, owner FROM revenue_projects WHERE project_id=%s", (payload.project_id,))
+        row = c.fetchone()
+        if row:
+            if not product: product = row['product']
+            if not client:  client  = row['client']
+            if not owner:   owner   = row['owner'] or owner
+    c.execute("""INSERT INTO invoices
+        (project_id,lob,owner,product,client,invoice_no,invoice_date,period,
+         invoice_amount,paid_amount,paid_date,notes,tahun)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+        (payload.project_id or None, 'DCSS', owner, product, client,
+         payload.invoice_no, payload.invoice_date or None, payload.period,
+         payload.invoice_amount, payload.paid_amount,
+         payload.paid_date or None, payload.notes, yr))
+    conn.commit()
+    if payload.project_id:
+        sync_project_status(payload.project_id)
+    conn.close()
+    return {"message": "Invoice berhasil dibuat."}
+
+
+@app.post("/api/v1/revenue/invoices/{iid}/pay", tags=["Revenue"])
+def invoice_pay(iid: int, payload: InvoicePay, user: dict = Depends(require_menu("rev_invoice"))):
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute("SELECT project_id FROM invoices WHERE id=%s", (iid,))
+    row = c.fetchone()
+    pid = row['project_id'] if row else None
+    c.execute("UPDATE invoices SET paid_amount=%s, paid_date=%s WHERE id=%s",
+              (payload.paid_amount, payload.paid_date or None, iid))
+    conn.commit()
+    if pid:
+        sync_project_status(pid)
+    conn.close()
+    return {"message": "Pembayaran berhasil diperbarui."}
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# KPI PROSPECTING
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class KpiUpdate(BaseModel):
+    q1_actual: float = 0
+    q2_actual: float = 0
+    q3_actual: float = 0
+    q4_actual: float = 0
+
+
+@app.get("/api/v1/revenue/kpi", tags=["Revenue"])
+def kpi_list(tahun: int = Query(0), user: dict = Depends(require_menu("rev_kpi"))):
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute("SELECT * FROM kpi_prospecting ORDER BY sort_order")
+    kpis = [_norm(dict(r)) for r in c.fetchall()]
+    from collections import defaultdict
+    grouped = defaultdict(list)
+    for k in kpis:
+        grouped[k['kpi_category']].append(k)
+    conn.close()
+    return {"kpis": kpis, "grouped": dict(grouped)}
+
+
+@app.put("/api/v1/revenue/kpi/{kid}", tags=["Revenue"])
+def kpi_update(kid: int, payload: KpiUpdate, user: dict = Depends(require_menu("rev_kpi"))):
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute("""UPDATE kpi_prospecting SET q1_actual=%s,q2_actual=%s,q3_actual=%s,q4_actual=%s WHERE id=%s""",
+              (payload.q1_actual, payload.q2_actual, payload.q3_actual, payload.q4_actual, kid))
+    conn.commit(); conn.close()
+    return {"message": "KPI berhasil diperbarui."}
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# BUDGET MONITORING
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class BudgetUpdate(BaseModel):
+    actual_amount: float = 0
+    notes: str = ""
+
+
+@app.get("/api/v1/revenue/budget", tags=["Revenue"])
+def budget_monitoring_api(tahun: int = Query(0), user: dict = Depends(require_menu("rev_budget"))):
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute("""SELECT perspektif_bsc, SUM(budget_amount) total_budget,
+        SUM(actual_amount) total_actual, COUNT(*) items FROM budget_items GROUP BY perspektif_bsc""")
+    by_bsc = [_norm(dict(r)) for r in c.fetchall()]
+    c.execute("SELECT * FROM budget_items ORDER BY perspektif_bsc, id")
+    items = [_norm(dict(r)) for r in c.fetchall()]
+    c.execute("SELECT SUM(budget_amount) t, SUM(actual_amount) a FROM budget_items")
+    totals = _norm(dict(c.fetchone()))
+    conn.close()
+    return {
+        "by_bsc": by_bsc, "items": items,
+        "total_budget": float(totals['t'] or 0),
+        "total_actual": float(totals['a'] or 0),
+    }
+
+
+@app.put("/api/v1/revenue/budget/{bid}", tags=["Revenue"])
+def budget_update(bid: int, payload: BudgetUpdate, user: dict = Depends(require_menu("rev_budget"))):
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute("UPDATE budget_items SET actual_amount=%s, notes=%s WHERE id=%s",
+              (payload.actual_amount, payload.notes, bid))
+    conn.commit(); conn.close()
+    return {"message": "Budget berhasil diperbarui."}
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# MASTER DATA
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@app.get("/api/v1/roles", tags=["Master"])
+def roles_list(user: dict = Depends(require_menu("roles"))):
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute("SELECT * FROM roles ORDER BY id")
+    roles = [_norm(dict(r)) for r in c.fetchall()]
+    c.execute("SELECT role_id, menu_key FROM role_menus")
+    role_menus: dict = {}
+    for r in c.fetchall():
+        role_menus.setdefault(r['role_id'], []).append(r['menu_key'])
+    conn.close()
+    for role in roles:
+        role['menus'] = role_menus.get(role['id'], [])
+    return {"roles": roles, "all_menus": ALL_MENUS}
+
+
+@app.get("/api/v1/users", tags=["Master"])
+def users_list(user: dict = Depends(require_menu("users"))):
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute("""SELECT u.id, u.nama, u.email, u.role_id, u.is_active, r.nama as role_nama
+                 FROM users u LEFT JOIN roles r ON u.role_id=r.id ORDER BY u.id""")
+    users = [_norm(dict(r)) for r in c.fetchall()]
+    c.execute("SELECT * FROM roles ORDER BY id")
+    roles = [_norm(dict(r)) for r in c.fetchall()]
+    conn.close()
+    return {"users": users, "roles": roles}
+
+
+@app.get("/api/v1/sales", tags=["Master"])
+def sales_list_api(user: dict = Depends(get_current_user)):
+    """Daftar sales = users beserta role mereka."""
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute("""SELECT u.id, u.nama, u.email, u.is_active, r.nama as role_nama
+                 FROM users u LEFT JOIN roles r ON u.role_id=r.id ORDER BY u.nama""")
+    sales = [_norm(dict(r)) for r in c.fetchall()]
+    conn.close()
+    return {"sales": sales}
+
+
+@app.get("/api/v1/menus", tags=["Master"])
+def menus_list(user: dict = Depends(get_current_user)):
+    allowed = list(get_user_menus(user["role_id"]))
+    nav = [m for m in ALL_MENUS if m["key"] in allowed]
+    return {"all_menus": ALL_MENUS, "allowed_menus": allowed, "nav_menus": nav}
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# IMPORT CSV
+# ═══════════════════════════════════════════════════════════════════════════════
+
+PIPELINE_TEMPLATE_HEADERS = [
+    "lead_id","nama_company","product","contact_person","segmen","sub_segmen",
+    "source","stage","prioritas","tgl_masuk","propose_value","deal_value",
+    "probability","exp_close_date","sales_owner","next_fu_date","last_fu_date",
+    "last_fu_notes","fu_count","days_in_stage","remarks",
+]
+
+REVENUE_TEMPLATE_HEADERS = [
+    "project_id","lob","owner","product","client","kategori","type","tahun",
+    "target_month","revenue_target","actual_revenue","invoice_date","payment_date",
+    "pic","notes",
+]
+
+INVOICE_TEMPLATE_HEADERS = [
+    "project_id","lob","owner","product","client","invoice_no","invoice_date",
+    "period","invoice_amount","paid_amount","paid_date","notes",
+]
+
+from fastapi import UploadFile, File
+from fastapi.responses import StreamingResponse
+import csv, io
+
+
+def _csv_template(headers: list[str], rows: list[list] = None) -> StreamingResponse:
+    buf = io.StringIO()
+    w   = csv.writer(buf)
+    w.writerow(headers)
+    if rows:
+        for r in rows:
+            w.writerow(r)
+    buf.seek(0)
+    return StreamingResponse(
+        iter([buf.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=template.csv"},
+    )
+
+
+def _clean(v, default=None):
+    if v is None: return default
+    s = str(v).strip()
+    return None if s in ('', 'nan', 'NaT', 'None') else s
+
+def _numval(v, default=0.0):
+    try:
+        f = float(str(v).replace(',', ''))
+        return 0.0 if f != f else f
+    except: return default
+
+def _datestr(v):
+    if not v: return None
+    s = str(v).strip()
+    if s in ('', 'nan', 'NaT', 'None'): return None
+    try:
+        import pandas as pd
+        ts = pd.Timestamp(s)
+        return ts.strftime('%Y-%m-%d') if not pd.isna(ts) else None
+    except: return s[:10] if len(s) >= 10 else None
+
+def _parse_csv(content: bytes) -> tuple[list[str], list[dict]]:
+    text = content.decode('utf-8-sig').replace('\r\n', '\n').replace('\r', '\n')
+    lines = [l for l in text.split('\n') if l.strip() and not l.strip().startswith('#')]
+    if not lines:
+        return [], []
+    first = lines[0]
+    sep = ';' if ';' in first and ',' not in first else ','
+    reader = csv.DictReader(lines, delimiter=sep)
+    rows = list(reader)
+    return list(reader.fieldnames or []), rows
+
+
+@app.get("/api/v1/import/template/{type}", tags=["Import"])
+def import_template(type: str, user=Depends(get_current_user)):
+    if type == "pipeline":
+        sample = [["LD-001","PT. Contoh","Product A","Budi","Swasta","BUMN",
+                   "Referral","New","Warm","2026-01-15","50000000","","","2026-06-30",
+                   "Sales A","","","","0","0",""]]
+        return _csv_template(PIPELINE_TEMPLATE_HEADERS, sample)
+    elif type == "revenue":
+        sample = [["1","DCSS","Owner A","Product B","PT. Client","Recurring",
+                   "Bulanan","2026","2026-01-01","100000000","0","","","PIC A",""]]
+        return _csv_template(REVENUE_TEMPLATE_HEADERS, sample)
+    elif type == "invoice":
+        sample = [["1","DCSS","Owner A","Product B","PT. Client","INV/2026/001",
+                   "2026-01-15","January","50000000","50000000","2026-01-20",""]]
+        return _csv_template(INVOICE_TEMPLATE_HEADERS, sample)
+    raise HTTPException(404, "Template tidak ditemukan")
+
+
+@app.post("/api/v1/import/pipeline", tags=["Import"])
+async def import_pipeline(
+    file: UploadFile = File(...),
+    clear_first: str = "0",
+    user=Depends(get_current_user),
+):
+    content = await file.read()
+    _, rows = _parse_csv(content)
+
+    conn = get_conn()
+    c    = conn.cursor()
+    imported = updated = skipped = 0
+    errors: list[str] = []
+
+    try:
+        if clear_first == "1":
+            c.execute("DELETE FROM followups")
+            c.execute("DELETE FROM leads")
+
+        STAGE_PROB = {
+            "new": 10, "in progress": 25, "demo scheduled": 40,
+            "proposal sent": 60, "negotiation": 80, "won": 100,
+            "on hold": 20, "lost": 0,
+        }
+
+        for i, row in enumerate(rows, 1):
+            lid  = _clean(row.get("lead_id"))
+            nama = _clean(row.get("nama_company"))
+            if not lid or not nama:
+                skipped += 1
+                continue
+
+            prob_raw = _clean(row.get("probability"))
+            stage    = _clean(row.get("stage"), "New")
+            prob     = float(prob_raw) if prob_raw else float(STAGE_PROB.get((stage or "").lower(), 10))
+            pv       = _numval(row.get("propose_value"))
+            dv       = _numval(row.get("deal_value"))
+            wv       = dv * (prob / 100) if dv else pv * (prob / 100)
+
+            c.execute("SELECT lead_id FROM leads WHERE lead_id=%s", (lid,))
+            exists = c.fetchone()
+
+            c.execute("""
+                INSERT INTO leads
+                  (lead_id,nama_company,product,contact_person,segmen,sub_segmen,
+                   source,stage,prioritas,tgl_masuk,propose_value,deal_value,
+                   probability,exp_close_date,weighted_value,sales_owner,
+                   next_fu_date,last_fu_date,last_fu_notes,fu_count,days_in_stage,remarks)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                ON CONFLICT (lead_id) DO UPDATE SET
+                  nama_company=EXCLUDED.nama_company, product=EXCLUDED.product,
+                  contact_person=EXCLUDED.contact_person, segmen=EXCLUDED.segmen,
+                  sub_segmen=EXCLUDED.sub_segmen, source=EXCLUDED.source,
+                  stage=EXCLUDED.stage, prioritas=EXCLUDED.prioritas,
+                  tgl_masuk=EXCLUDED.tgl_masuk, propose_value=EXCLUDED.propose_value,
+                  deal_value=EXCLUDED.deal_value, probability=EXCLUDED.probability,
+                  exp_close_date=EXCLUDED.exp_close_date, weighted_value=EXCLUDED.weighted_value,
+                  sales_owner=EXCLUDED.sales_owner, next_fu_date=EXCLUDED.next_fu_date,
+                  last_fu_date=EXCLUDED.last_fu_date, last_fu_notes=EXCLUDED.last_fu_notes,
+                  fu_count=EXCLUDED.fu_count, days_in_stage=EXCLUDED.days_in_stage,
+                  remarks=EXCLUDED.remarks
+            """, (
+                lid, nama,
+                _clean(row.get("product")), _clean(row.get("contact_person")),
+                _clean(row.get("segmen")), _clean(row.get("sub_segmen")),
+                _clean(row.get("source")), stage,
+                _clean(row.get("prioritas"), "Warm"),
+                _datestr(row.get("tgl_masuk")), pv, dv, prob,
+                _datestr(row.get("exp_close_date")),
+                wv, _clean(row.get("sales_owner")),
+                _datestr(row.get("next_fu_date")), _datestr(row.get("last_fu_date")),
+                _clean(row.get("last_fu_notes")),
+                int(_numval(row.get("fu_count", 0))),
+                int(_numval(row.get("days_in_stage", 0))),
+                _clean(row.get("remarks")),
+            ))
+            if exists: updated += 1
+            else: imported += 1
+
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        errors.append(str(e))
+    finally:
+        conn.close()
+
+    return {"imported": imported, "updated": updated, "skipped": skipped, "errors": errors}
+
+
+@app.post("/api/v1/import/revenue", tags=["Import"])
+async def import_revenue(
+    file: UploadFile = File(...),
+    clear_first: str = "0",
+    user=Depends(get_current_user),
+):
+    from main import auto_status_risk
+    content = await file.read()
+    _, rows = _parse_csv(content)
+
+    conn = get_conn()
+    c    = conn.cursor()
+    imported = updated = skipped = 0
+    errors: list[str] = []
+
+    try:
+        if clear_first == "1":
+            c.execute("DELETE FROM revenue_monthly")
+            c.execute("DELETE FROM revenue_projects")
+
+        for row in rows:
+            pid_raw = _clean(row.get("project_id"))
+            if not pid_raw: skipped += 1; continue
+            try: project_id = f"REV-{int(float(pid_raw)):04d}"
+            except: skipped += 1; continue
+
+            rev_target = _numval(row.get("revenue_target"))
+            rev_actual = _numval(row.get("actual_revenue"))
+            tahun_raw  = _clean(row.get("tahun"))
+            tahun      = int(float(tahun_raw)) if tahun_raw else date.today().year
+            type_raw   = _clean(row.get("type"))
+            tgt_month  = _datestr(row.get("target_month"))
+            status, risk = auto_status_risk(rev_target, rev_actual, type_raw, tahun, tgt_month)
+
+            c.execute("SELECT project_id FROM revenue_projects WHERE project_id=%s", (project_id,))
+            exists = c.fetchone()
+
+            c.execute("""
+                INSERT INTO revenue_projects
+                  (project_id,lob,owner,product,client,kategori,type,tahun,target_month,
+                   revenue_target,actual_revenue,status,invoice_date,payment_date,
+                   notes,risk_level,action_required,pic)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                ON CONFLICT (project_id) DO UPDATE SET
+                  lob=EXCLUDED.lob, owner=EXCLUDED.owner, product=EXCLUDED.product,
+                  client=EXCLUDED.client, kategori=EXCLUDED.kategori, type=EXCLUDED.type,
+                  tahun=EXCLUDED.tahun, target_month=EXCLUDED.target_month,
+                  revenue_target=EXCLUDED.revenue_target, actual_revenue=EXCLUDED.actual_revenue,
+                  status=EXCLUDED.status, invoice_date=EXCLUDED.invoice_date,
+                  payment_date=EXCLUDED.payment_date, notes=EXCLUDED.notes,
+                  risk_level=EXCLUDED.risk_level, pic=EXCLUDED.pic
+            """, (
+                project_id,
+                _clean(row.get("lob"), "DCSS"), _clean(row.get("owner")),
+                _clean(row.get("product")), _clean(row.get("client")),
+                _clean(row.get("kategori")), type_raw, tahun, tgt_month,
+                rev_target, rev_actual, status,
+                _datestr(row.get("invoice_date")), _datestr(row.get("payment_date")),
+                _clean(row.get("notes")), risk,
+                _clean(row.get("action_required")), _clean(row.get("pic")),
+            ))
+            if exists: updated += 1
+            else: imported += 1
+
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        errors.append(str(e))
+    finally:
+        conn.close()
+
+    return {"imported": imported, "updated": updated, "skipped": skipped, "errors": errors}
+
+
+@app.post("/api/v1/import/invoice", tags=["Import"])
+async def import_invoice(
+    file: UploadFile = File(...),
+    clear_first: str = "0",
+    user=Depends(get_current_user),
+):
+    content = await file.read()
+    _, rows = _parse_csv(content)
+
+    conn = get_conn()
+    c    = conn.cursor()
+    imported = updated = skipped = 0
+    synced_months = synced_projects = 0
+    errors: list[str] = []
+    affected_projects: set[str] = set()
+
+    try:
+        if clear_first == "1":
+            c.execute("DELETE FROM invoices")
+
+        for row in rows:
+            pid_raw = _clean(row.get("project_id"))
+            inv_no  = _clean(row.get("invoice_no"))
+            if not pid_raw or not inv_no: skipped += 1; continue
+            try: project_id = f"REV-{int(float(pid_raw)):04d}"
+            except: skipped += 1; continue
+
+            c.execute("SELECT id FROM revenue_projects WHERE project_id=%s", (project_id,))
+            if not c.fetchone(): errors.append(f"Project {project_id} tidak ditemukan (baris invoice_no={inv_no})"); skipped += 1; continue
+
+            c.execute("SELECT id FROM invoices WHERE invoice_no=%s AND project_id=%s", (inv_no, project_id))
+            exists = c.fetchone()
+
+            inv_amount  = _numval(row.get("invoice_amount"))
+            paid_amount = _numval(row.get("paid_amount"))
+            paid_date   = _datestr(row.get("paid_date"))
+
+            status_raw = _clean(row.get("status"))
+            if status_raw:
+                inv_status = status_raw
+            elif paid_amount >= inv_amount and inv_amount > 0:
+                inv_status = "Lunas"
+            elif paid_amount > 0:
+                inv_status = "Partial"
+            else:
+                inv_status = "Unpaid"
+
+            if exists:
+                c.execute("""
+                    UPDATE invoices SET
+                      invoice_date=%s, period=%s, invoice_amount=%s,
+                      paid_amount=%s, paid_date=%s, status=%s, notes=%s
+                    WHERE invoice_no=%s AND project_id=%s
+                """, (
+                    _datestr(row.get("invoice_date")), _clean(row.get("period")),
+                    inv_amount, paid_amount, paid_date, inv_status,
+                    _clean(row.get("notes")), inv_no, project_id,
+                ))
+                updated += 1
+            else:
+                c.execute("""
+                    INSERT INTO invoices
+                      (project_id,lob,owner,product,client,invoice_no,invoice_date,
+                       period,invoice_amount,paid_amount,paid_date,status,notes)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                """, (
+                    project_id,
+                    _clean(row.get("lob"), "DCSS"), _clean(row.get("owner")),
+                    _clean(row.get("product")), _clean(row.get("client")),
+                    inv_no, _datestr(row.get("invoice_date")),
+                    _clean(row.get("period")), inv_amount, paid_amount,
+                    paid_date, inv_status, _clean(row.get("notes")),
+                ))
+                imported += 1
+            affected_projects.add(project_id)
+
+        # Recalculate actual revenue per project dari invoices
+        for pid in affected_projects:
+            c.execute("""
+                SELECT EXTRACT(MONTH FROM paid_date) as m, SUM(paid_amount) as total
+                FROM invoices
+                WHERE project_id=%s AND paid_date IS NOT NULL AND paid_amount > 0
+                GROUP BY EXTRACT(MONTH FROM paid_date)
+            """, (pid,))
+            monthly = {int(r['m']): float(r['total']) for r in c.fetchall()}
+
+            for month_num, total in monthly.items():
+                from calendar import month_name
+                mn = list(month_name)[month_num]
+                c.execute("""
+                    UPDATE revenue_monthly SET actual=%s
+                    WHERE project_id=%s AND month_num=%s
+                """, (total, pid, month_num))
+                if c.rowcount == 0:
+                    c.execute("""
+                        INSERT INTO revenue_monthly (project_id,month_num,month_name,target,actual,status)
+                        VALUES (%s,%s,%s,0,%s,'Achieve')
+                    """, (pid, month_num, mn, total))
+                synced_months += 1
+
+            c.execute("SELECT SUM(actual) FROM revenue_monthly WHERE project_id=%s", (pid,))
+            total_actual = float(c.fetchone()['sum'] or 0)
+            c.execute("""
+                UPDATE revenue_projects SET actual_revenue=%s WHERE project_id=%s
+            """, (total_actual, pid))
+            synced_projects += 1
+
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        errors.append(str(e))
+    finally:
+        conn.close()
+
+    return {
+        "imported": imported, "updated": updated, "skipped": skipped,
+        "errors": errors, "synced_months": synced_months, "synced_projects": synced_projects,
+    }
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# FIELD ACTIVITY
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@app.get("/api/v1/field-activity/stats", tags=["Field Activity"])
+def field_activity_stats(user=Depends(get_current_user)):
+    conn = get_conn(); c = conn.cursor()
+    today = date.today().isoformat()
+    c.execute("""
+        SELECT
+          COUNT(*) FILTER (WHERE DATE(checked_in_at) = %s) as today_visits,
+          COUNT(*) FILTER (WHERE checked_out_at IS NULL AND DATE(checked_in_at) = %s) as active_now,
+          COUNT(DISTINCT user_id) FILTER (WHERE DATE(checked_in_at) = %s) as active_sales,
+          ROUND(AVG(duration_minutes) FILTER (WHERE duration_minutes IS NOT NULL AND DATE(checked_in_at) = %s)) as avg_duration
+        FROM visit_logs
+    """, (today, today, today, today))
+    row = dict(c.fetchone())
+    conn.close()
+    return {
+        "today_visits":  int(row.get("today_visits") or 0),
+        "active_now":    int(row.get("active_now") or 0),
+        "active_sales":  int(row.get("active_sales") or 0),
+        "avg_duration":  int(row.get("avg_duration") or 0),
+    }
+
+
+@app.get("/api/v1/field-activity/map", tags=["Field Activity"])
+def field_activity_map(user=Depends(get_current_user)):
+    conn = get_conn(); c = conn.cursor()
+    today = date.today().isoformat()
+    c.execute("""
+        SELECT v.id, v.user_id, u.nama as sales_nama, v.lead_id,
+               v.latitude, v.longitude, v.address, v.type,
+               v.checked_in_at, v.checked_out_at, v.notes
+        FROM visit_logs v
+        LEFT JOIN users u ON v.user_id = u.id
+        WHERE DATE(v.checked_in_at) = %s
+          AND v.latitude IS NOT NULL AND v.longitude IS NOT NULL
+        ORDER BY v.checked_in_at DESC
+    """, (today,))
+    rows = [_norm(dict(r)) for r in c.fetchall()]
+    conn.close()
+    return rows
+
+
+@app.get("/api/v1/field-activity", tags=["Field Activity"])
+def field_activity_list(
+    date: str = None,
+    user_id: int = None,
+    type: str = None,
+    page: int = 1,
+    per_page: int = 20,
+    current_user=Depends(get_current_user),
+):
+    conn = get_conn(); c = conn.cursor()
+    where, params = [], []
+    if date:
+        where.append("DATE(v.checked_in_at) = %s"); params.append(date)
+    if user_id:
+        where.append("v.user_id = %s"); params.append(user_id)
+    if type:
+        where.append("v.type = %s"); params.append(type)
+
+    where_str = ("WHERE " + " AND ".join(where)) if where else ""
+
+    c.execute(f"SELECT COUNT(*) as cnt FROM visit_logs v {where_str}", params)
+    total = int(c.fetchone()["cnt"])
+    offset = (page - 1) * per_page
+
+    c.execute(f"""
+        SELECT v.*, u.nama as sales_nama, l.nama_company
+        FROM visit_logs v
+        LEFT JOIN users u ON v.user_id = u.id
+        LEFT JOIN leads l ON v.lead_id = l.lead_id
+        {where_str}
+        ORDER BY v.checked_in_at DESC
+        LIMIT %s OFFSET %s
+    """, params + [per_page, offset])
+    rows = [_norm(dict(r)) for r in c.fetchall()]
+    conn.close()
+    return {"data": rows, "total": total, "pages": -(-total // per_page), "page": page}
+
+
+class CheckinRequest(BaseModel):
+    user_id: int
+    lead_id: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    address: Optional[str] = None
+    accuracy_m: Optional[int] = None
+    notes: Optional[str] = None
+    photo_base64: Optional[str] = None
+    checked_in_at: Optional[str] = None
+
+
+@app.post("/api/v1/field-activity/checkin", status_code=201, tags=["Field Activity"])
+def field_activity_checkin(req: CheckinRequest, user=Depends(get_current_user)):
+    import base64, uuid, os
+    conn = get_conn(); c = conn.cursor()
+
+    photo_url = None
+    if req.photo_base64:
+        try:
+            header, data = req.photo_base64.split(",", 1)
+            ext = "jpg"
+            img_bytes = base64.b64decode(data)
+            fname = f"checkin_{uuid.uuid4().hex}.{ext}"
+            upload_dir = os.path.join(os.path.dirname(__file__), "static", "uploads", "checkin")
+            os.makedirs(upload_dir, exist_ok=True)
+            with open(os.path.join(upload_dir, fname), "wb") as f:
+                f.write(img_bytes)
+            photo_url = f"/static/uploads/checkin/{fname}"
+        except Exception:
+            pass
+
+    checked_in_at = req.checked_in_at or datetime.now().isoformat()
+
+    c.execute("""
+        INSERT INTO visit_logs
+          (user_id, lead_id, type, latitude, longitude, address,
+           accuracy_m, photo_url, notes, checked_in_at, created_at, updated_at)
+        VALUES (%s,%s,'check_in',%s,%s,%s,%s,%s,%s,%s,NOW(),NOW())
+        RETURNING id
+    """, (
+        req.user_id, req.lead_id, req.latitude, req.longitude,
+        req.address, req.accuracy_m, photo_url, req.notes, checked_in_at,
+    ))
+    new_id = c.fetchone()["id"]
+    conn.commit(); conn.close()
+    return {"id": new_id, "message": "Check-in berhasil."}
+
+
+class CheckoutRequest(BaseModel):
+    checked_out_at: Optional[str] = None
+    checkout_latitude: Optional[float] = None
+    checkout_longitude: Optional[float] = None
+    notes: Optional[str] = None
+
+
+@app.put("/api/v1/field-activity/{visit_id}/checkout", tags=["Field Activity"])
+def field_activity_checkout(visit_id: int, req: CheckoutRequest, user=Depends(get_current_user)):
+    conn = get_conn(); c = conn.cursor()
+    checked_out_at = req.checked_out_at or datetime.now().isoformat()
+    c.execute("""
+        UPDATE visit_logs SET
+          checked_out_at = %s,
+          checkout_latitude = %s,
+          checkout_longitude = %s,
+          duration_minutes = EXTRACT(EPOCH FROM (%s::timestamp - checked_in_at)) / 60,
+          updated_at = NOW()
+        WHERE id = %s
+    """, (checked_out_at, req.checkout_latitude, req.checkout_longitude, checked_out_at, visit_id))
+    if c.rowcount == 0:
+        conn.close(); raise HTTPException(404, "Data tidak ditemukan.")
+    conn.commit(); conn.close()
+    return {"message": "Check-out berhasil."}
+
+
+@app.delete("/api/v1/field-activity/{visit_id}", tags=["Field Activity"])
+def field_activity_delete(visit_id: int, user=Depends(get_current_user)):
+    conn = get_conn(); c = conn.cursor()
+    c.execute("DELETE FROM visit_logs WHERE id=%s", (visit_id,))
+    if c.rowcount == 0:
+        conn.close(); raise HTTPException(404, "Data tidak ditemukan.")
+    conn.commit(); conn.close()
+    return {"message": "Data dihapus."}
+
+
+@app.get("/api/v1/field-activity/monitor", tags=["Field Activity"])
+def field_activity_monitor(
+    date_from: str = None,
+    date_to: str = None,
+    user_id: int = None,
+    current_user=Depends(get_current_user),
+):
+    conn = get_conn(); c = conn.cursor()
+    today = date.today().isoformat()
+    date_from = date_from or today
+    date_to   = date_to   or today
+
+    where, params = ["DATE(v.checked_in_at) BETWEEN %s AND %s"], [date_from, date_to]
+    if user_id:
+        where.append("v.user_id = %s"); params.append(user_id)
+
+    where_str = "WHERE " + " AND ".join(where)
+
+    c.execute(f"""
+        SELECT v.*, u.nama as sales_nama, l.nama_company
+        FROM visit_logs v
+        LEFT JOIN users u ON v.user_id = u.id
+        LEFT JOIN leads l ON v.lead_id = l.lead_id
+        {where_str}
+        ORDER BY v.checked_in_at DESC
+    """, params)
+    activities = [_norm(dict(r)) for r in c.fetchall()]
+
+    # Map points (hanya yang ada koordinat)
+    map_points = [
+        {"id": a["id"], "lat": a["latitude"], "lng": a["longitude"],
+         "sales": a["sales_nama"], "address": a["address"],
+         "type": a["type"], "time": a["checked_in_at"]}
+        for a in activities if a.get("latitude") and a.get("longitude")
+    ]
+
+    # Summary per sales
+    c.execute(f"""
+        SELECT u.nama as sales_nama,
+               COUNT(*) as total_visits,
+               COUNT(*) FILTER (WHERE v.checked_out_at IS NOT NULL) as completed,
+               ROUND(AVG(v.duration_minutes) FILTER (WHERE v.duration_minutes IS NOT NULL)) as avg_duration
+        FROM visit_logs v
+        LEFT JOIN users u ON v.user_id = u.id
+        {where_str}
+        GROUP BY u.nama ORDER BY total_visits DESC
+    """, params)
+    summary = [_norm(dict(r)) for r in c.fetchall()]
+
+    conn.close()
+    return {"activities": activities, "map_points": map_points, "summary": summary,
+            "date_from": date_from, "date_to": date_to}
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# HEALTH CHECK
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@app.get("/api/v1/health", tags=["System"])
+def health():
+    try:
+        conn = get_conn()
+        c = conn.cursor()
+        c.execute("SELECT 1")
+        conn.close()
+        db_ok = True
+    except Exception as e:
+        db_ok = False
+    return {
+        "status": "ok" if db_ok else "degraded",
+        "db": "connected" if db_ok else "error",
+        "version": "2.0.0",
+        "timestamp": datetime.utcnow().isoformat() + "Z",
+    }
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("api_app:app", host="0.0.0.0", port=8001, reload=True)

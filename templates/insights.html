@@ -1,0 +1,436 @@
+{% extends "base.html" %}
+{% block title %}Pipeline Insights{% endblock %}
+{% block page_title %}Pipeline Insights — Apa Yang Terjadi & Apa Yang Harus Dilakukan{% endblock %}
+
+{% block content %}
+<div class="space-y-8" x-data="insights()">
+
+    <!-- ── ALERT BANNER ──────────────────────────────────────────── -->
+    <div class="bg-gradient-to-r from-red-600 to-red-800 rounded-2xl p-6 text-white shadow-lg">
+        <div class="flex items-start gap-4">
+            <div class="text-4xl">🚨</div>
+            <div>
+                <h2 class="text-xl font-bold mb-1">Pipeline dalam kondisi kritis</h2>
+                <p class="text-red-100 text-sm leading-relaxed">
+                    Dari <strong class="text-white">{{ total }} leads</strong> senilai total <strong class="text-white">Rp {{ "{:,.0f}".format(total_propose/1e9) }} Miliar</strong>,
+                    hanya <strong class="text-white">{{ won_pct }}% berhasil closed</strong> dengan nilai deal
+                    <strong class="text-white">Rp {{ "{:,.0f}".format(total_deal/1e9) }} Miliar</strong>.
+                    <strong class="text-white">Tidak ada satu pun aktivitas follow-up</strong> yang tercatat di sistem —
+                    pipeline berjalan tanpa kendali.
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════
+         BAGIAN 1: APA YANG TERJADI
+    ══════════════════════════════════════════════════════════════ -->
+    <section>
+        <div class="flex items-center gap-3 mb-5">
+            <div class="w-8 h-8 bg-slate-800 text-white rounded-full flex items-center justify-center font-bold text-sm flex-shrink-0">1</div>
+            <h2 class="text-lg font-bold text-gray-800">Apa Yang Terjadi dengan Pipeline?</h2>
+        </div>
+
+        <!-- Metric strip -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+                <div class="text-xs text-gray-400 mb-1">Total Leads</div>
+                <div class="text-3xl font-black text-gray-800">{{ total }}</div>
+                <div class="text-xs text-gray-400 mt-1">sejak pipeline dibuka</div>
+            </div>
+            <div class="bg-red-50 rounded-xl border border-red-100 shadow-sm p-5">
+                <div class="text-xs text-red-400 mb-1">Tidak Aktif (On Hold + Lost)</div>
+                <div class="text-3xl font-black text-red-600">{{ inactive }}</div>
+                <div class="text-xs text-red-400 mt-1">{{ inactive_pct }}% dari total pipeline</div>
+            </div>
+            <div class="bg-amber-50 rounded-xl border border-amber-100 shadow-sm p-5">
+                <div class="text-xs text-amber-500 mb-1">Nilai Tertahan (On Hold)</div>
+                <div class="text-2xl font-black text-amber-700">Rp {{ "{:,.0f}".format(onhold_val/1e9) }}M</div>
+                <div class="text-xs text-amber-500 mt-1">{{ onhold_count }} leads membeku</div>
+            </div>
+            <div class="bg-green-50 rounded-xl border border-green-100 shadow-sm p-5">
+                <div class="text-xs text-green-500 mb-1">Deal Closed (Won)</div>
+                <div class="text-2xl font-black text-green-700">Rp {{ "{:,.0f}".format(total_deal/1e9) }}M</div>
+                <div class="text-xs text-green-500 mt-1">{{ won_count }} deals · win rate {{ won_pct }}%</div>
+            </div>
+        </div>
+
+        <!-- Pipeline funnel + breakdown side by side -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+            <!-- Funnel visual -->
+            <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
+                <h3 class="font-semibold text-gray-700 text-sm mb-4">Pipeline Funnel — Sebaran Stage</h3>
+                <div class="space-y-2">
+                    {% for s in stage_data %}
+                    <div>
+                        <div class="flex justify-between text-xs mb-1">
+                            <span class="font-medium text-gray-700 flex items-center gap-2">
+                                <span class="w-2 h-2 rounded-full inline-block" style="background:{{ s.color }}"></span>
+                                {{ s.stage }}
+                            </span>
+                            <span class="text-gray-400">{{ s.cnt }} leads · Rp {{ "{:,.0f}".format((s.val or 0)/1e9) }}M</span>
+                        </div>
+                        <div class="bg-gray-100 rounded-full h-6 overflow-hidden">
+                            <div class="h-6 rounded-full flex items-center px-2 text-xs text-white font-semibold transition-all"
+                                style="width:{{ s.pct }}%; background:{{ s.color }}; min-width: 2rem;">
+                                {{ s.pct }}%
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                <div class="mt-4 pt-4 border-t border-gray-100 text-xs text-gray-400 text-center">
+                    💡 46% pipeline macet di On Hold + Lost
+                </div>
+            </div>
+
+            <!-- Temuan kritis -->
+            <div class="space-y-4">
+                <div class="bg-white rounded-xl border-l-4 border-red-400 shadow-sm p-4">
+                    <div class="font-semibold text-gray-800 text-sm mb-2 flex items-center gap-2">
+                        <span class="text-red-500 text-lg">📉</span> 0 Follow-Up Tercatat
+                    </div>
+                    <p class="text-sm text-gray-600 leading-relaxed">
+                        Semua <strong>{{ total }} leads memiliki FU Count = 0</strong>.
+                        Tidak ada aktivitas yang terdokumentasi — tidak diketahui apakah leads sudah dihubungi atau belum.
+                        <strong>18 leads aktif</strong> tidak memiliki jadwal follow-up berikutnya.
+                    </p>
+                </div>
+
+                <div class="bg-white rounded-xl border-l-4 border-amber-400 shadow-sm p-4">
+                    <div class="font-semibold text-gray-800 text-sm mb-2 flex items-center gap-2">
+                        <span class="text-amber-500 text-lg">🧊</span> 7 Leads Beku di On Hold — Senilai Rp {{ "{:,.0f}".format(onhold_val/1e9) }}M
+                    </div>
+                    <p class="text-sm text-gray-600 leading-relaxed">
+                        Termasuk <strong>BNPL (Rp 12M)</strong> dan <strong>ITC Finance (Rp 2.85M)</strong> yang
+                        statusnya Hot/Warm namun tidak ada tindakan. Tanpa deadline reaktivasi, leads ini akan menjadi Lost.
+                    </p>
+                </div>
+
+                <div class="bg-white rounded-xl border-l-4 border-purple-400 shadow-sm p-4">
+                    <div class="font-semibold text-gray-800 text-sm mb-2 flex items-center gap-2">
+                        <span class="text-purple-500 text-lg">👤</span> Sales Owner Tidak Terdefinisi
+                    </div>
+                    <p class="text-sm text-gray-600 leading-relaxed">
+                        Mayoritas leads tidak memiliki <strong>sales owner</strong> yang ditugaskan.
+                        Tidak jelas siapa penanggung jawab setiap lead — accountability hilang.
+                    </p>
+                </div>
+
+                <div class="bg-white rounded-xl border-l-4 border-gray-400 shadow-sm p-4">
+                    <div class="font-semibold text-gray-800 text-sm mb-2 flex items-center gap-2">
+                        <span class="text-gray-500 text-lg">⚠️</span> FIFGROUP Terduplikat — 3 Entri Stagnan
+                    </div>
+                    <p class="text-sm text-gray-600 leading-relaxed">
+                        LD-009, LD-010, LD-014 semuanya <em>FIFGROUP</em> di stage <em>New</em> dengan nilai Rp 0 dan tanpa FU.
+                        Duplikat ini mengaburkan ukuran pipeline yang sebenarnya.
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Lost deals highlight -->
+        <div class="mt-6 bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+            <div class="px-5 py-3 bg-red-50 border-b border-red-100">
+                <h3 class="font-semibold text-red-700 text-sm flex items-center gap-2">
+                    <span>💸</span> 5 Deals Hilang — Total Propose Rp {{ "{:,.0f}".format(lost_val/1e9) }}M Tidak Terkonversi
+                </h3>
+            </div>
+            <table class="w-full text-sm">
+                <thead class="bg-gray-50 text-gray-500 text-xs uppercase">
+                    <tr>
+                        <th class="px-4 py-2 text-left">Company</th>
+                        <th class="px-4 py-2 text-left">Segmen</th>
+                        <th class="px-4 py-2 text-right">Propose Value</th>
+                        <th class="px-4 py-2 text-left">Prioritas</th>
+                        <th class="px-4 py-2 text-left">Alasan Lost</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-50">
+                    {% for l in lost_leads %}
+                    <tr class="hover:bg-gray-50">
+                        <td class="px-4 py-2.5 font-medium text-gray-800">{{ l.nama_company }}</td>
+                        <td class="px-4 py-2.5 text-gray-500 text-xs">{{ l.segmen or '-' }}</td>
+                        <td class="px-4 py-2.5 text-right font-mono text-xs text-red-600 font-semibold">
+                            {% if l.propose_value %}Rp {{ "{:,.0f}".format(l.propose_value) }}{% else %}<span class="text-gray-300">-</span>{% endif %}
+                        </td>
+                        <td class="px-4 py-2.5 text-xs {% if l.prioritas == 'Hot' %}text-red-600 font-semibold{% else %}text-gray-400{% endif %}">
+                            {% if l.prioritas == 'Hot' %}🔥{% elif l.prioritas == 'Warm' %}🟡{% else %}🔵{% endif %} {{ l.prioritas }}
+                        </td>
+                        <td class="px-4 py-2.5 text-xs">
+                            <span class="bg-red-50 text-red-500 px-2 py-0.5 rounded">Tidak ada catatan</span>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════════════════
+         BAGIAN 2: KENAPA BISA TERJADI
+    ══════════════════════════════════════════════════════════════ -->
+    <section>
+        <div class="flex items-center gap-3 mb-5">
+            <div class="w-8 h-8 bg-slate-800 text-white rounded-full flex items-center justify-center font-bold text-sm flex-shrink-0">2</div>
+            <h2 class="text-lg font-bold text-gray-800">Kenapa Bisa Terjadi?</h2>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+
+            <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+                <div class="w-12 h-12 bg-red-100 rounded-xl flex items-center justify-center text-2xl mb-4">📋</div>
+                <h3 class="font-bold text-gray-800 mb-2">Pipeline Dipakai sebagai Daftar, Bukan Alat Kerja</h3>
+                <p class="text-sm text-gray-500 leading-relaxed">
+                    CRM hanya diisi saat ada lead baru, tetapi tidak diupdate secara rutin.
+                    Tidak ada kebiasaan mencatat aktivitas FU, sehingga sistem tidak mencerminkan realita di lapangan.
+                </p>
+                <div class="mt-4 bg-red-50 rounded-lg p-3 text-xs text-red-600 font-medium">
+                    📊 Bukti: FU Count = 0 untuk seluruh 26 leads
+                </div>
+            </div>
+
+            <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+                <div class="w-12 h-12 bg-amber-100 rounded-xl flex items-center justify-center text-2xl mb-4">👥</div>
+                <h3 class="font-bold text-gray-800 mb-2">Tidak Ada Ownership yang Jelas</h3>
+                <p class="text-sm text-gray-500 leading-relaxed">
+                    Lead tanpa sales owner yang jelas tidak ada yang merasa bertanggung jawab.
+                    Tidak ada mekanisme review mingguan yang memaksa sales mengupdate status.
+                </p>
+                <div class="mt-4 bg-amber-50 rounded-lg p-3 text-xs text-amber-600 font-medium">
+                    📊 Bukti: Mayoritas leads tanpa sales owner terdefinisi
+                </div>
+            </div>
+
+            <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+                <div class="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center text-2xl mb-4">🎯</div>
+                <h3 class="font-bold text-gray-800 mb-2">Tidak Ada Proses Kualifikasi Lead</h3>
+                <p class="text-sm text-gray-500 leading-relaxed">
+                    4 leads di stage "New" memiliki Propose Value = Rp 0 — belum dikualifikasi sama sekali.
+                    Leads masuk pipeline tapi tidak diproses lebih lanjut.
+                </p>
+                <div class="mt-4 bg-purple-50 rounded-lg p-3 text-xs text-purple-600 font-medium">
+                    📊 Bukti: 4 leads New dengan nilai Rp 0 tanpa FU
+                </div>
+            </div>
+
+            <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+                <div class="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center text-2xl mb-4">⏳</div>
+                <h3 class="font-bold text-gray-800 mb-2">"On Hold" Digunakan Sebagai Tempat Parkir Permanen</h3>
+                <p class="text-sm text-gray-500 leading-relaxed">
+                    7 leads diparkir di On Hold tanpa deadline reaktivasi. Tanpa batas waktu,
+                    On Hold menjadi graveyard leads — tidak mati, tidak hidup.
+                </p>
+                <div class="mt-4 bg-blue-50 rounded-lg p-3 text-xs text-blue-600 font-medium">
+                    📊 Bukti: Rp 18.7M tertahan, BNPL & PT.SMI tidak bergerak berbulan-bulan
+                </div>
+            </div>
+
+            <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+                <div class="w-12 h-12 bg-orange-100 rounded-xl flex items-center justify-center text-2xl mb-4">🔕</div>
+                <h3 class="font-bold text-gray-800 mb-2">Kehilangan Deal Besar Tanpa Post-Mortem</h3>
+                <p class="text-sm text-gray-500 leading-relaxed">
+                    PT. SMI (Rp 12M) dan MTF (Rp 1.3M) hilang sebagai Lost tanpa catatan alasan.
+                    Tim tidak bisa belajar dari kegagalan karena tidak ada data.
+                </p>
+                <div class="mt-4 bg-orange-50 rounded-lg p-3 text-xs text-orange-600 font-medium">
+                    📊 Bukti: Kolom alasan kosong di semua deals Lost
+                </div>
+            </div>
+
+            <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+                <div class="w-12 h-12 bg-gray-100 rounded-xl flex items-center justify-center text-2xl mb-4">📉</div>
+                <h3 class="font-bold text-gray-800 mb-2">Konsentrasi Risiko di Satu Segmen</h3>
+                <p class="text-sm text-gray-500 leading-relaxed">
+                    Bank dan Multifinance menguasai 69% pipeline value, tapi conversion rate Multifinance
+                    hanya 0.9% (deal Rp 171M dari propose Rp 18.4M). Segmen terbesar memberikan return terendah.
+                </p>
+                <div class="mt-4 bg-gray-50 rounded-lg p-3 text-xs text-gray-600 font-medium">
+                    📊 Bukti: Multifinance: 10 leads, propose Rp 18.4M, deal Rp 171M
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════════════════
+         BAGIAN 3: APA YANG HARUS DILAKUKAN
+    ══════════════════════════════════════════════════════════════ -->
+    <section>
+        <div class="flex items-center gap-3 mb-5">
+            <div class="w-8 h-8 bg-slate-800 text-white rounded-full flex items-center justify-center font-bold text-sm flex-shrink-0">3</div>
+            <h2 class="text-lg font-bold text-gray-800">Apa Yang Harus Dilakukan?</h2>
+        </div>
+
+        <!-- Timeline action plan -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-5 mb-6">
+
+            <!-- Minggu ini -->
+            <div class="bg-red-600 text-white rounded-2xl p-5 shadow-lg">
+                <div class="text-xs font-bold uppercase tracking-wider opacity-75 mb-3">🔥 Minggu Ini (Urgent)</div>
+                <div class="space-y-3">
+                    <div class="bg-white/10 rounded-xl p-3">
+                        <div class="font-semibold text-sm mb-1">1. Assign Sales Owner</div>
+                        <div class="text-xs opacity-80">Setiap lead harus ada penanggung jawab. Tidak boleh ada lead tanpa owner.</div>
+                    </div>
+                    <div class="bg-white/10 rounded-xl p-3">
+                        <div class="font-semibold text-sm mb-1">2. Set Next FU Date</div>
+                        <div class="text-xs opacity-80">18 leads tanpa jadwal FU. Tentukan tanggal follow-up untuk setiap lead aktif hari ini.</div>
+                    </div>
+                    <div class="bg-white/10 rounded-xl p-3">
+                        <div class="font-semibold text-sm mb-1">3. Rescue On Hold Hot</div>
+                        <div class="text-xs opacity-80">ITC Finance (Rp 2.85M) & Superbank (Rp 1.5M) prioritas utama. Hubungi minggu ini.</div>
+                    </div>
+                    <div class="bg-white/10 rounded-xl p-3">
+                        <div class="font-semibold text-sm mb-1">4. BNPL — Decision</div>
+                        <div class="text-xs opacity-80">Rp 12M di On Hold terlalu besar untuk dibiarkan. Tetapkan: lanjut atau close as Lost.</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bulan ini -->
+            <div class="bg-amber-500 text-white rounded-2xl p-5 shadow-lg">
+                <div class="text-xs font-bold uppercase tracking-wider opacity-75 mb-3">📅 Bulan Ini (Penting)</div>
+                <div class="space-y-3">
+                    <div class="bg-white/10 rounded-xl p-3">
+                        <div class="font-semibold text-sm mb-1">5. Kualifikasi New Leads</div>
+                        <div class="text-xs opacity-80">FIFGROUP (3 entri), Kopkar ADIRA — tentukan nilai, kontak, dan proposal. Atau hapus jika tidak valid.</div>
+                    </div>
+                    <div class="bg-white/10 rounded-xl p-3">
+                        <div class="font-semibold text-sm mb-1">6. Post-Mortem Lost Deals</div>
+                        <div class="text-xs opacity-80">Wawancara internal: kenapa PT. SMI (Rp 12M) dan MTF (Rp 1.3M) hilang? Catat lesson learned.</div>
+                    </div>
+                    <div class="bg-white/10 rounded-xl p-3">
+                        <div class="font-semibold text-sm mb-1">7. Weekly Pipeline Review</div>
+                        <div class="text-xs opacity-80">Rapat 30 menit setiap Senin. Setiap sales owner laporan progress leads-nya. Wajib update CRM sebelum rapat.</div>
+                    </div>
+                    <div class="bg-white/10 rounded-xl p-3">
+                        <div class="font-semibold text-sm mb-1">8. Bank Ganesha — Negotiation</div>
+                        <div class="text-xs opacity-80">Ada di Negotiation tapi nilai Rp 0 dan tanpa FU. Segera tentukan deal terms dan follow-up.</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Triwulan ini -->
+            <div class="bg-blue-700 text-white rounded-2xl p-5 shadow-lg">
+                <div class="text-xs font-bold uppercase tracking-wider opacity-75 mb-3">🎯 Triwulan Ini (Strategis)</div>
+                <div class="space-y-3">
+                    <div class="bg-white/10 rounded-xl p-3">
+                        <div class="font-semibold text-sm mb-1">9. Diversifikasi Segmen</div>
+                        <div class="text-xs opacity-80">Koperasi punya 6 leads tapi 0 deal. Tinjau apakah segmen ini layak dilanjutkan atau perlu pendekatan berbeda.</div>
+                    </div>
+                    <div class="bg-white/10 rounded-xl p-3">
+                        <div class="font-semibold text-sm mb-1">10. Target Win Rate 20%+</div>
+                        <div class="text-xs opacity-80">Win rate saat ini 11.5%. Dengan proses FU yang disiplin, target 20% di Q3 2026 adalah realistis.</div>
+                    </div>
+                    <div class="bg-white/10 rounded-xl p-3">
+                        <div class="font-semibold text-sm mb-1">11. SLA per Stage</div>
+                        <div class="text-xs opacity-80">Tetapkan batas waktu maksimal per stage (New: 3 hari, In Progress: 7 hari). Lead yang melewati SLA otomatis di-flag.</div>
+                    </div>
+                    <div class="bg-white/10 rounded-xl p-3">
+                        <div class="font-semibold text-sm mb-1">12. KPI Bulanan per Sales</div>
+                        <div class="text-xs opacity-80">Ukur: jumlah FU, konversi stage, proposal dikirim, dan deal closed. Buat leaderboard sederhana.</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Priority action table -->
+        <div class="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+            <div class="px-5 py-4 bg-slate-800 text-white">
+                <h3 class="font-bold text-sm">📋 Priority Action List — Leads yang Perlu Tindakan Segera</h3>
+                <p class="text-xs text-slate-400 mt-0.5">Diurutkan berdasarkan potensi nilai × urgensi</p>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead class="bg-gray-50 text-gray-500 text-xs uppercase border-b border-gray-100">
+                        <tr>
+                            <th class="px-4 py-2.5 text-left">Prioritas</th>
+                            <th class="px-4 py-2.5 text-left">Lead</th>
+                            <th class="px-4 py-2.5 text-left">Stage</th>
+                            <th class="px-4 py-2.5 text-right">Nilai</th>
+                            <th class="px-4 py-2.5 text-left">Masalah</th>
+                            <th class="px-4 py-2.5 text-left">Tindakan yang Diperlukan</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-50">
+                        {% for a in action_list %}
+                        <tr class="hover:bg-gray-50">
+                            <td class="px-4 py-3">
+                                <span class="inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold
+                                    {% if a.rank <= 3 %}bg-red-100 text-red-700
+                                    {% elif a.rank <= 6 %}bg-amber-100 text-amber-700
+                                    {% else %}bg-blue-50 text-blue-600{% endif %}">
+                                    {{ a.rank }}
+                                </span>
+                            </td>
+                            <td class="px-4 py-3">
+                                <a href="/pipeline/{{ a.lead_id }}" class="font-semibold text-gray-800 hover:text-blue-600 hover:underline">{{ a.nama_company }}</a>
+                                <div class="text-xs text-gray-400">{{ a.lead_id }} · {{ a.segmen or '-' }}</div>
+                            </td>
+                            <td class="px-4 py-3">
+                                <span class="px-2 py-0.5 rounded text-xs font-medium
+                                    {% if a.stage == 'On Hold' %}stage-on-hold
+                                    {% elif a.stage == 'New' %}stage-new
+                                    {% elif a.stage == 'In Progress' %}stage-in-progress
+                                    {% elif a.stage == 'Negotiation' %}stage-negotiation
+                                    {% elif a.stage == 'Lost' %}stage-lost
+                                    {% else %}stage-proposal{% endif %}">{{ a.stage }}</span>
+                            </td>
+                            <td class="px-4 py-3 text-right font-mono text-xs font-semibold {% if a.propose_value >= 1e9 %}text-blue-700{% else %}text-gray-500{% endif %}">
+                                {% if a.propose_value %}Rp {{ "{:,.0f}".format(a.propose_value) }}{% else %}<span class="text-gray-300">-</span>{% endif %}
+                            </td>
+                            <td class="px-4 py-3">
+                                <span class="text-xs px-2 py-1 rounded-full font-medium
+                                    {% if a.issue_type == 'frozen' %}bg-amber-100 text-amber-700
+                                    {% elif a.issue_type == 'no_fu' %}bg-red-100 text-red-600
+                                    {% elif a.issue_type == 'no_owner' %}bg-purple-100 text-purple-700
+                                    {% elif a.issue_type == 'no_value' %}bg-gray-100 text-gray-600
+                                    {% elif a.issue_type == 'duplicate' %}bg-orange-100 text-orange-600
+                                    {% else %}bg-gray-100 text-gray-500{% endif %}">
+                                    {{ a.issue_label }}
+                                </span>
+                            </td>
+                            <td class="px-4 py-3 text-xs text-gray-600 max-w-xs">{{ a.action }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+
+    <!-- ── SCOREBOARD ─────────────────────────────────────────────── -->
+    <section>
+        <div class="bg-slate-900 rounded-2xl p-6 text-white">
+            <h2 class="font-bold text-lg mb-5 flex items-center gap-3">
+                <span>🏆</span> Scorecard Pipeline Saat Ini
+            </h2>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {% for score in scorecard %}
+                <div class="bg-white/5 rounded-xl p-4 border border-white/10">
+                    <div class="text-xs text-slate-400 mb-2">{{ score.label }}</div>
+                    <div class="text-2xl font-black mb-1 {{ score.color }}">{{ score.value }}</div>
+                    <div class="flex items-center gap-1.5">
+                        <span class="text-lg">{{ score.icon }}</span>
+                        <span class="text-xs {{ score.color }} font-medium">{{ score.status }}</span>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            <div class="mt-5 border-t border-white/10 pt-4 text-xs text-slate-400 text-center">
+                Data real-time dari database · Diperbarui setiap kali halaman dimuat
+            </div>
+        </div>
+    </section>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function insights() {
+    return {};
+}
+</script>
+{% endblock %}

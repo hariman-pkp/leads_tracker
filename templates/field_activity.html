@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+{% block title %}Field Activity{% endblock %}
+{% block page_title %}Field Activity — Kunjungan Sales{% endblock %}
+
+{% block content %}
+
+{# ── FILTER TANGGAL ──────────────────────────────────────────────────────── #}
+<form method="get" action="/field-activity"
+      class="bg-white rounded-xl border border-gray-100 shadow-sm p-4 mb-5 flex flex-wrap gap-3 items-end">
+  <div class="flex flex-col gap-1">
+    <label class="text-xs text-gray-500 font-medium">Tanggal</label>
+    <input type="date" name="tgl" value="{{ filter_tgl }}"
+           class="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+  </div>
+  <button type="submit"
+          class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors">
+    <i class="fas fa-filter mr-1"></i> Filter
+  </button>
+  <a href="/field-activity" class="text-sm text-gray-400 hover:text-gray-600 px-2 py-2">Hari Ini</a>
+</form>
+
+{# ── SUMMARY PER SALES ───────────────────────────────────────────────────── #}
+{% if summary %}
+<div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
+  {% for s in summary %}
+  <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
+    <div class="flex items-center gap-2 mb-2">
+      <div class="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
+        <span class="text-blue-600 font-bold text-sm">{{ s.nama[0] if s.nama else '?' }}</span>
+      </div>
+      <span class="font-semibold text-gray-800 text-sm truncate">{{ s.nama or 'Unknown' }}</span>
+    </div>
+    <div class="flex gap-3 text-xs">
+      <div>
+        <div class="font-black text-xl text-gray-800">{{ s.visits }}</div>
+        <div class="text-gray-400">kunjungan</div>
+      </div>
+      {% if s.total_menit %}
+      <div class="border-l border-gray-100 pl-3">
+        <div class="font-black text-xl text-green-600">{{ (s.total_menit / 60)|round(1) }}</div>
+        <div class="text-gray-400">jam total</div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{# ── DAFTAR KUNJUNGAN ────────────────────────────────────────────────────── #}
+{% if activities %}
+<div class="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+  <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+    <h2 class="font-bold text-gray-800 text-sm">
+      <i class="fas fa-map-marker-alt text-blue-500 mr-2"></i>
+      Kunjungan {{ filter_tgl }}
+      <span class="ml-2 bg-blue-100 text-blue-700 text-xs font-bold px-2 py-0.5 rounded-full">{{ activities|length }}</span>
+    </h2>
+  </div>
+
+  <div class="divide-y divide-gray-50">
+    {% for a in activities %}
+    <div class="px-5 py-4 hover:bg-gray-50/50 transition-colors">
+      <div class="flex items-start gap-4">
+        {# Status indicator #}
+        <div class="flex-shrink-0 mt-1">
+          {% if a.checked_out_at %}
+          <div class="w-9 h-9 rounded-full bg-green-100 flex items-center justify-center">
+            <i class="fas fa-check text-green-600 text-sm"></i>
+          </div>
+          {% else %}
+          <div class="w-9 h-9 rounded-full bg-blue-100 flex items-center justify-center">
+            <span class="w-2.5 h-2.5 bg-blue-500 rounded-full animate-pulse"></span>
+          </div>
+          {% endif %}
+        </div>
+
+        <div class="flex-1 min-w-0">
+          <div class="flex items-start justify-between gap-2 flex-wrap">
+            <div>
+              <div class="flex items-center gap-2 flex-wrap">
+                <span class="font-semibold text-gray-800 text-sm">{{ a.sales_nama or 'Unknown' }}</span>
+                {% if a.lead_id %}
+                <span class="text-xs bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full font-medium">
+                  <i class="fas fa-briefcase mr-1 text-xs"></i>{{ a.lead_id }}
+                </span>
+                {% endif %}
+                {% if not a.checked_out_at %}
+                <span class="text-xs bg-green-50 text-green-600 px-2 py-0.5 rounded-full font-medium animate-pulse">
+                  ● Sedang di lokasi
+                </span>
+                {% endif %}
+              </div>
+              <div class="flex items-center gap-1 mt-1 text-gray-500 text-xs">
+                <i class="fas fa-map-marker-alt text-red-400 text-xs"></i>
+                <span class="truncate max-w-xs sm:max-w-md">{{ a.address or 'Lokasi tidak diketahui' }}</span>
+              </div>
+            </div>
+
+            {# Waktu & durasi #}
+            <div class="text-right flex-shrink-0 text-xs text-gray-400">
+              <div class="flex items-center gap-1 justify-end">
+                <i class="fas fa-sign-in-alt text-green-400"></i>
+                <span>
+                  {{ a.checked_in_at[11:16] if a.checked_in_at and a.checked_in_at|length > 10 else a.checked_in_at or '-' }}
+                </span>
+              </div>
+              {% if a.checked_out_at %}
+              <div class="flex items-center gap-1 justify-end mt-0.5">
+                <i class="fas fa-sign-out-alt text-red-400"></i>
+                <span>
+                  {{ a.checked_out_at[11:16] if a.checked_out_at and a.checked_out_at|length > 10 else a.checked_out_at }}
+                </span>
+              </div>
+              {% endif %}
+              {% if a.duration_minutes %}
+              <div class="mt-1">
+                <span class="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full font-semibold">
+                  {{ a.duration_minutes }} mnt
+                </span>
+              </div>
+              {% endif %}
+            </div>
+          </div>
+
+          {% if a.notes %}
+          <div class="mt-2 text-xs text-gray-500 bg-gray-50 rounded-lg px-3 py-2">
+            <i class="fas fa-comment-alt text-gray-300 mr-1"></i>{{ a.notes }}
+          </div>
+          {% endif %}
+
+          {# Map link #}
+          {% if a.latitude and a.longitude and a.latitude != '0' %}
+          <div class="mt-2">
+            <a href="https://maps.google.com/?q={{ a.latitude }},{{ a.longitude }}"
+               target="_blank" rel="noopener"
+               class="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800">
+              <i class="fas fa-external-link-alt text-xs"></i> Lihat di Maps
+            </a>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+{% else %}
+<div class="bg-white rounded-xl border border-dashed border-gray-200 p-16 text-center">
+  <div class="text-5xl mb-4">📍</div>
+  <div class="font-bold text-gray-700 text-lg mb-2">Tidak ada kunjungan</div>
+  <div class="text-gray-400 text-sm">Belum ada check-in pada tanggal {{ filter_tgl }}.</div>
+  <div class="text-xs text-gray-300 mt-1">Sales dapat check-in via APEX Mobile App.</div>
+</div>
+{% endif %}
+
+{% endblock %}

@@ -1,0 +1,2796 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>APEX Mobile App — Wireframe | PT. PKP</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    /* PKP Brand */
+    --pkp-blue: #29ABE2;
+    --pkp-yellow: #F7B731;
+    --pkp-dark: #0E87BF;
+
+    /* Dark Theme — sama dengan web APEX */
+    --primary: #29ABE2;
+    --primary-light: #4DC3F7;
+    --primary-dark: #0E87BF;
+    --accent: #F7B731;
+
+    /* Phone screen dark bg */
+    --bg:        #0F1923;   /* main screen background */
+    --bg-2:      #162032;   /* card / panel */
+    --bg-3:      #1E2D40;   /* elevated card */
+    --bg-4:      #243447;   /* input, hover */
+    --border:    #1E3048;   /* subtle border */
+    --border-2:  #2A4060;   /* visible border */
+
+    /* Text */
+    --text:       #E2E8F0;
+    --text-muted: #8B9BB4;
+    --text-light: #5A6E88;
+
+    /* Status colors */
+    --green:   #4CAF50;
+    --green-bg:#0D2B14;
+    --orange:  #FF8C42;
+    --orange-bg:#2B1A00;
+    --red:     #F44336;
+    --red-bg:  #2B0A0A;
+    --yellow:  #F7B731;
+    --yellow-bg:#2B2000;
+    --purple:  #9C6FE4;
+    --purple-bg:#1E1040;
+    --teal:    #26C6DA;
+    --success: #4CAF50;
+    --warning: #FF8C42;
+    --danger:  #F44336;
+
+    --phone-w: 375px;
+    --phone-h: 812px;
+  }
+
+  body {
+    background: #060D17;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    color: var(--text);
+    min-height: 100vh;
+  }
+
+  /* ─── NAV ─── */
+  .top-nav {
+    background: #0A1628;
+    padding: 10px 24px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    border-bottom: 2px solid #29ABE2;
+    position: sticky; top: 0; z-index: 100;
+  }
+  .top-nav .logo { color: #E2E8F0; font-size: 18px; font-weight: 700; letter-spacing: .5px; display:flex; align-items:center; gap:10px; }
+  .top-nav .logo img { height: 32px; }
+  .top-nav .logo-sep { width:1px; height:28px; background:rgba(255,255,255,.2); }
+  .top-nav .logo-apex { font-size:17px; font-weight:800; color:#F7B731; letter-spacing:2px; }
+  .top-nav .logo-sub { font-size:10px; color:rgba(255,255,255,.5); letter-spacing:.5px; display:block; line-height:1.2; }
+  .top-nav .logo span { color: #29ABE2; }
+  .top-nav .badge { background: #29ABE2; color: #E2E8F0; font-size: 11px; padding: 2px 8px; border-radius: 20px; }
+  .screen-tabs {
+    display: flex; gap: 6px; margin-left: auto; flex-wrap: wrap;
+  }
+  .screen-tabs button {
+    background: transparent; border: 1px solid #2d4a6e; color: #90CAF9;
+    padding: 6px 14px; border-radius: 20px; cursor: pointer; font-size: 12px;
+    transition: all .2s;
+  }
+  .screen-tabs button.active, .screen-tabs button:hover {
+    background: #29ABE2; border-color: #29ABE2; color: #E2E8F0;
+  }
+
+  /* ─── MAIN CANVAS ─── */
+  .canvas {
+    padding: 32px 24px;
+    min-height: calc(100vh - 55px);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+  }
+
+  .screen-group {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+  }
+  .screen-group.visible { display: flex; }
+
+  .screen-label {
+    color: #4DC3F7; font-size: 13px; font-weight: 600;
+    text-align: center; margin-bottom: 10px; letter-spacing: .5px;
+    text-transform: uppercase;
+  }
+
+  .screens-row {
+    display: flex;
+    gap: 28px;
+    justify-content: center;
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+
+  .phone-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+  }
+  .phone-title {
+    color: #90CAF9; font-size: 12px; font-weight: 600;
+    text-align: center; letter-spacing: .3px;
+  }
+
+  /* ─── PHONE SHELL ─── */
+  .phone {
+    width: var(--phone-w);
+    background: var(--bg);
+    border-radius: 40px;
+    overflow: hidden;
+    box-shadow: 0 24px 80px rgba(0,0,0,.7), 0 0 0 10px #0a0f18, 0 0 0 12px #1a2535;
+    position: relative;
+    min-height: 680px;
+  }
+
+  /* Status bar */
+  .status-bar {
+    background: #060D17;
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 10px 20px 6px;
+    font-size: 12px; font-weight: 600; color: rgba(255,255,255,.9);
+  }
+  .status-bar .notch {
+    position: absolute; top: 0; left: 50%;
+    transform: translateX(-50%);
+    width: 120px; height: 28px;
+    background: #111; border-radius: 0 0 18px 18px;
+    z-index: 10;
+  }
+  .status-icons { display: flex; gap: 6px; align-items: center; }
+
+  /* ─── SCREEN CONTENT ─── */
+  .screen { background: var(--bg); flex: 1; overflow: hidden; }
+
+  /* App Bar */
+  .app-bar {
+    background: #0A1628;
+    padding: 14px 16px;
+    display: flex; align-items: center; gap: 10px;
+    color: var(--text);
+    border-bottom: 1px solid var(--border);
+  }
+  .app-bar .title { font-size: 17px; font-weight: 700; flex: 1; color: #E2E8F0; }
+  .app-bar .subtitle { font-size: 11px; color: var(--text-muted); display: block; margin-top: 2px; }
+  .app-bar .action-btn {
+    width: 34px; height: 34px; background: var(--bg-3);
+    border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 16px; cursor: pointer; border: 1px solid var(--border-2);
+  }
+  .app-bar.primary-bar { background: linear-gradient(90deg, #0A1628, #162032); border-bottom: 1px solid var(--pkp-blue); }
+  .app-bar.primary-bar .title { color: #E2E8F0; }
+
+  /* Bottom Nav */
+  .bottom-nav {
+    background: #0A1628;
+    display: flex; justify-content: space-around;
+    padding: 8px 0 18px;
+    border-top: 1px solid var(--border);
+  }
+  .nav-item {
+    display: flex; flex-direction: column; align-items: center;
+    gap: 3px; padding: 4px 10px; cursor: pointer;
+    font-size: 10px; color: var(--text-light);
+    border-radius: 8px; transition: all .15s;
+  }
+  .nav-item.active { color: var(--primary); }
+  .nav-item .nav-icon { font-size: 20px; }
+  .nav-item .nav-dot {
+    width: 4px; height: 4px; border-radius: 50%;
+    background: var(--primary); margin-top: 2px;
+  }
+
+  /* ─── COMPONENTS ─── */
+  .section { padding: 14px 16px; }
+  .section-title { font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: .8px; margin-bottom: 10px; }
+
+  .card {
+    background: var(--bg-2); border-radius: 12px;
+    padding: 14px; margin-bottom: 10px;
+    border: 1px solid var(--border);
+  }
+  .card-sm {
+    background: var(--bg-2); border-radius: 10px;
+    padding: 10px 12px; margin-bottom: 8px;
+    border: 1px solid var(--border);
+  }
+
+  .row { display: flex; align-items: center; gap: 8px; }
+  .row.between { justify-content: space-between; }
+  .row.top { align-items: flex-start; }
+  .col { display: flex; flex-direction: column; gap: 2px; }
+  .flex1 { flex: 1; }
+
+  /* Input */
+  .input-field {
+    width: 100%; padding: 12px 14px; border-radius: 10px;
+    border: 1.5px solid var(--border-2); background: var(--bg-4);
+    font-size: 14px; color: var(--text); margin-bottom: 12px;
+    outline: none;
+  }
+  .input-field.focused { border-color: var(--primary); background: var(--bg-3); }
+  .input-label { font-size: 12px; color: var(--text-muted); font-weight: 600; margin-bottom: 5px; }
+
+  /* Button */
+  .btn {
+    width: 100%; padding: 14px; border-radius: 12px;
+    background: var(--primary); color: #E2E8F0;
+    font-size: 15px; font-weight: 600; text-align: center;
+    cursor: pointer; border: none;
+    box-shadow: 0 3px 16px rgba(41,171,226,.3);
+  }
+  .btn-outline {
+    background: transparent; border: 1.5px solid var(--primary);
+    color: var(--primary); box-shadow: none;
+  }
+  .btn-sm { padding: 8px 14px; font-size: 13px; border-radius: 8px; width: auto; }
+  .btn-danger { background: var(--red); box-shadow: 0 3px 12px rgba(244,67,54,.3); }
+  .btn-success { background: var(--green); box-shadow: 0 3px 12px rgba(76,175,80,.3); }
+
+  /* Badge / Tag — dark style */
+  .badge-tag {
+    display: inline-block; padding: 3px 10px; border-radius: 20px;
+    font-size: 11px; font-weight: 600;
+  }
+  .tag-blue   { background: rgba(41,171,226,.18); color: #4DC3F7; border: 1px solid rgba(41,171,226,.3); }
+  .tag-green  { background: rgba(76,175,80,.18);  color: #69D96D; border: 1px solid rgba(76,175,80,.3); }
+  .tag-orange { background: rgba(255,140,66,.18); color: #FFB347; border: 1px solid rgba(255,140,66,.3); }
+  .tag-red    { background: rgba(244,67,54,.15);  color: #FF6B6B; border: 1px solid rgba(244,67,54,.3); }
+  .tag-gray   { background: rgba(139,155,180,.12);color: #8B9BB4; border: 1px solid rgba(139,155,180,.2); }
+  .tag-purple { background: rgba(156,111,228,.18);color: #B89AF0; border: 1px solid rgba(156,111,228,.3); }
+  .tag-yellow { background: rgba(247,183,49,.18); color: #F7B731; border: 1px solid rgba(247,183,49,.3); }
+
+  /* Avatar */
+  .avatar {
+    width: 40px; height: 40px; border-radius: 50%;
+    background: var(--bg-3); border: 1.5px solid var(--border-2);
+    display: flex; align-items: center; justify-content: center;
+    color: var(--primary); font-size: 15px; font-weight: 700; flex-shrink: 0;
+  }
+  .avatar-sm { width: 32px; height: 32px; font-size: 12px; }
+
+  /* Divider */
+  .divider { height: 1px; background: var(--border); margin: 8px 0; }
+  .divider-v { width: 1px; background: var(--border); align-self: stretch; }
+
+  /* Text utils */
+  .text-primary { color: var(--primary); }
+  .text-muted { color: var(--text-muted); }
+  .text-light { color: var(--text-light); }
+  .text-danger { color: #FF6B6B; }
+  .text-success { color: #69D96D; }
+  .text-warning { color: #FFB347; }
+  .text-white { color: #E2E8F0; }
+  .text-yellow { color: var(--pkp-yellow); }
+  .text-sm { font-size: 12px; }
+  .text-xs { font-size: 11px; }
+  .text-lg { font-size: 16px; }
+  .text-xl { font-size: 20px; font-weight: 700; }
+  .text-bold { font-weight: 700; }
+  .text-semibold { font-weight: 600; }
+  .text-right { text-align: right; }
+  .text-center { text-align: center; }
+
+  /* List item */
+  .list-item {
+    background: var(--bg-2); padding: 12px 14px;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer; transition: background .15s;
+  }
+  .list-item:hover { background: var(--bg-3); }
+  .list-item:last-child { border-bottom: none; }
+
+  /* Stats grid */
+  .stats-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+    margin-bottom: 0;
+  }
+  .stats-grid-3 { grid-template-columns: 1fr 1fr 1fr; }
+  .stat-card {
+    background: var(--bg-2); border-radius: 12px; padding: 14px;
+    border: 1px solid var(--border);
+  }
+  .stat-value { font-size: 22px; font-weight: 800; color: var(--primary); }
+  .stat-label { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+
+  /* Progress bar */
+  .progress-wrap { background: var(--bg-4); border-radius: 99px; height: 6px; overflow: hidden; }
+  .progress-fill { height: 100%; border-radius: 99px; background: var(--primary); }
+
+  /* Search bar */
+  .search-bar {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--bg-3); border-radius: 12px; padding: 10px 14px;
+    border: 1.5px solid var(--border-2); margin-bottom: 12px;
+  }
+  .search-icon { font-size: 16px; color: var(--text-muted); }
+  .search-placeholder { font-size: 14px; color: var(--text-light); flex: 1; }
+
+  /* Chip filter */
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+  .chip {
+    padding: 5px 12px; border-radius: 20px; font-size: 12px; font-weight: 600;
+    background: var(--bg-3); border: 1.5px solid var(--border-2); color: var(--text-muted);
+    cursor: pointer;
+  }
+  .chip.active { background: rgba(41,171,226,.2); border-color: var(--primary); color: var(--primary); }
+
+  /* FAB */
+  .fab {
+    position: absolute; bottom: 80px; right: 16px;
+    width: 54px; height: 54px; border-radius: 50%;
+    background: #F7B731; box-shadow: 0 4px 16px rgba(247,183,49,.45);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 24px; color: #E2E8F0; cursor: pointer; z-index: 5;
+  }
+
+  /* Scrollable body */
+  .scroll-body { overflow-y: auto; max-height: 580px; }
+
+  /* Timeline */
+  .timeline-item { display: flex; gap: 10px; padding-bottom: 14px; }
+  .timeline-dot-wrap { display: flex; flex-direction: column; align-items: center; gap: 0; }
+  .timeline-dot {
+    width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0;
+    background: var(--primary); margin-top: 3px;
+  }
+  .timeline-line { width: 2px; flex: 1; background: #E2E8F0; min-height: 20px; }
+
+  /* Illustration placeholder */
+  .illus {
+    background: linear-gradient(135deg, #0A1E30, #0E2840);
+    border-radius: 12px; display: flex; align-items: center;
+    justify-content: center; font-size: 40px;
+  }
+
+  /* Map placeholder */
+  .map-placeholder {
+    background: linear-gradient(135deg, #0A1E14, #0D2B14);
+    border-radius: 12px; display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 6px; color: var(--green);
+  }
+  .map-placeholder .map-pin { font-size: 32px; }
+
+  /* ─── SCREEN SPECIFIC ─── */
+  /* Login */
+  .login-header {
+    background: linear-gradient(175deg, #020810 0%, #04101E 50%, #071828 100%);
+    padding: 44px 24px 32px;
+    text-align: center;
+    display: flex; flex-direction: column; align-items: center;
+    border-bottom: 1px solid rgba(41,171,226,.12);
+  }
+
+  /* Gradient cards */
+  .grad-blue { background: linear-gradient(135deg, #0E87BF, #29ABE2); }
+  .grad-orange { background: linear-gradient(135deg, #E65100, #FF8F00); }
+  .grad-green { background: linear-gradient(135deg, #2E7D32, #43A047); }
+  .grad-red { background: linear-gradient(135deg, #C62828, #E53935); }
+
+  /* Step indicator */
+  .steps { display: flex; gap: 6px; justify-content: center; margin: 12px 0; }
+  .step-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--border); }
+  .step-dot.active { background: var(--primary); width: 20px; border-radius: 4px; }
+
+  /* Toggle */
+  .toggle-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; }
+  .toggle {
+    width: 44px; height: 24px; border-radius: 12px; background: var(--border);
+    position: relative; cursor: pointer; transition: background .2s;
+  }
+  .toggle.on { background: var(--primary); }
+  .toggle::after {
+    content: ''; position: absolute; width: 18px; height: 18px;
+    background: var(--bg-2); border-radius: 50%; top: 3px; left: 3px;
+    transition: transform .2s; box-shadow: 0 1px 3px rgba(0,0,0,.2);
+  }
+  .toggle.on::after { transform: translateX(20px); }
+
+  /* Chart bar */
+  .chart-bars { display: flex; align-items: flex-end; gap: 8px; height: 70px; padding: 0 4px; }
+  .chart-bar {
+    flex: 1; border-radius: 4px 4px 0 0;
+    background: var(--bg-4); position: relative;
+  }
+  .chart-bar.active { background: var(--primary); }
+  .chart-bar .bar-label { position: absolute; bottom: -18px; left: 50%; transform: translateX(-50%); font-size: 10px; color: var(--text-light); white-space: nowrap; }
+  .chart-bar .bar-val { position: absolute; top: -18px; left: 50%; transform: translateX(-50%); font-size: 10px; color: var(--primary); font-weight: 700; white-space: nowrap; }
+
+  /* Swipe hint */
+  .swipe-hint {
+    display: flex; align-items: center; gap: 6px;
+    background: rgba(247,183,49,.08); border: 1px dashed rgba(247,183,49,.4);
+    border-radius: 8px; padding: 8px 12px; margin-bottom: 10px;
+    font-size: 11px; color: var(--pkp-yellow);
+  }
+
+  /* Toggle */
+  .toggle-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; }
+  .toggle {
+    width: 44px; height: 24px; border-radius: 12px; background: var(--bg-4);
+    border: 1px solid var(--border-2);
+    position: relative; cursor: pointer; transition: all .2s;
+  }
+  .toggle.on { background: var(--primary); border-color: var(--primary); }
+  .toggle::after {
+    content: ''; position: absolute; width: 18px; height: 18px;
+    background: var(--bg-2); border-radius: 50%; top: 3px; left: 3px;
+    transition: transform .2s; box-shadow: 0 1px 3px rgba(0,0,0,.4);
+  }
+  .toggle.on::after { transform: translateX(20px); }
+</style>
+</head>
+<body>
+
+<!-- TOP NAV -->
+<div class="top-nav">
+  <div class="logo">
+    <img src="pkp-logo-light.png" alt="PKP Logo" />
+    <div class="logo-sep"></div>
+    <div>
+      <span class="logo-apex">APEX</span>
+      <span class="logo-sub">Mobile App Wireframe</span>
+    </div>
+  </div>
+  <div class="badge">v1.0 — Fase 1 MVP</div>
+  <div class="screen-tabs">
+    <div style="display:flex;align-items:center;gap:4px;margin-right:6px;">
+      <span style="font-size:10px;color:rgba(255,255,255,.3);font-weight:700;letter-spacing:.5px;">FASE 1</span>
+    </div>
+    <button class="active" onclick="showScreen('login')">Login</button>
+    <button onclick="showScreen('dashboard')">Dashboard</button>
+    <button onclick="showScreen('pipeline')">Pipeline</button>
+    <button onclick="showScreen('detail')">Detail Lead</button>
+    <button onclick="showScreen('followup')">Follow-Up</button>
+    <button onclick="showScreen('checkin')">Check-in</button>
+    <button onclick="showScreen('contacts')">Kontak</button>
+    <button onclick="showScreen('daily')">Daily Report</button>
+    <div style="width:1px;height:20px;background:rgba(255,255,255,.15);margin:0 4px;"></div>
+    <div style="display:flex;align-items:center;gap:4px;margin-right:4px;">
+      <span style="font-size:10px;color:#4DC3F7;font-weight:700;letter-spacing:.5px;">FASE 2</span>
+    </div>
+    <button onclick="showScreen('location')" style="border-color:#4DC3F7;">📍 Location</button>
+    <button onclick="showScreen('notifikasi')" style="border-color:#4DC3F7;">🔔 Notifikasi</button>
+    <button onclick="showScreen('report-manager')" style="border-color:#4DC3F7;">📤 Report</button>
+    <div style="width:1px;height:20px;background:rgba(255,255,255,.15);margin:0 4px;"></div>
+    <div style="display:flex;align-items:center;gap:4px;margin-right:4px;">
+      <span style="font-size:10px;color:#F7B731;font-weight:700;letter-spacing:.5px;">FASE 3</span>
+    </div>
+    <button onclick="showScreen('ocr')" style="border-color:#F7B731;">📷 OCR</button>
+    <button onclick="showScreen('voice')" style="border-color:#F7B731;">🎤 Voice</button>
+    <button onclick="showScreen('offline')" style="border-color:#F7B731;">📶 Offline</button>
+    <button onclick="showScreen('analitik')" style="border-color:#F7B731;">📊 Analitik</button>
+  </div>
+</div>
+
+<div class="canvas">
+
+  <!-- ══════════════════════════════════════════
+       SCREEN 1: LOGIN
+  ══════════════════════════════════════════ -->
+  <div class="screen-group visible" id="screen-login">
+    <div class="screens-row">
+      <div class="phone-wrap">
+        <div class="phone-title">01 — Login Screen</div>
+        <div class="phone">
+          <div class="status-bar">
+            <div class="notch"></div>
+            <span>9:41</span>
+            <div class="status-icons">
+              <span>●●●</span><span>WiFi</span><span>🔋</span>
+            </div>
+          </div>
+
+          <!-- Login Header -->
+          <div class="login-header">
+            <img src="pkp-logo-dark.png" alt="PKP" style="height:52px;margin-bottom:14px;" />
+            <div style="font-size:28px;font-weight:900;color:#F7B731;letter-spacing:4px;margin-bottom:4px;">APEX</div>
+            <div style="font-size:12px;color:rgba(255,255,255,.75);letter-spacing:.5px;">Achievement & Performance Execution Platform</div>
+          </div>
+
+          <!-- Form -->
+          <div style="padding:24px 20px; background:var(--bg-2);">
+            <div style="font-size:18px;font-weight:700;color:var(--text);margin-bottom:6px;">Selamat datang 👋</div>
+            <div style="font-size:13px;color:var(--text-muted);margin-bottom:22px;">Masuk dengan akun APEX Anda</div>
+
+            <div class="input-label">Email / Username</div>
+            <div class="input-field focused" style="color:var(--text-muted);">hariman@pkp.co.id</div>
+
+            <div class="input-label">Password</div>
+            <div class="input-field" style="color:#ccc;display:flex;justify-content:space-between;align-items:center;">
+              <span>••••••••</span>
+              <span style="font-size:16px;color:var(--text-muted);">👁</span>
+            </div>
+
+            <div class="row between" style="margin-bottom:20px;">
+              <div class="row" style="gap:6px;">
+                <div style="width:16px;height:16px;border:2px solid var(--primary);border-radius:4px;background:var(--primary);display:flex;align-items:center;justify-content:center;"><span style="color:#E2E8F0;font-size:10px;">✓</span></div>
+                <span class="text-sm text-muted">Ingat saya</span>
+              </div>
+              <span class="text-sm text-primary" style="cursor:pointer;">Lupa password?</span>
+            </div>
+
+            <div class="btn">Masuk</div>
+
+            <div style="margin-top:16px;text-align:center;display:flex;align-items:center;gap:8px;">
+              <div style="flex:1;height:1px;background:var(--border);"></div>
+              <span class="text-xs text-muted">atau</span>
+              <div style="flex:1;height:1px;background:var(--border);"></div>
+            </div>
+
+            <div class="btn btn-outline" style="margin-top:16px;display:flex;align-items:center;justify-content:center;gap:8px;">
+              <span>👆</span> Masuk dengan Face ID / Fingerprint
+            </div>
+
+            <div style="margin-top:20px;padding:12px;background:rgba(41,171,226,.08);border-radius:10px;display:flex;align-items:center;gap:8px;">
+              <span style="font-size:18px;">🔒</span>
+              <div>
+                <div class="text-xs text-bold" style="color:#0E87BF;">Akun terhubung dengan web APEX</div>
+                <div class="text-xs text-muted">Gunakan username & password yang sama</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="phone-wrap">
+        <div class="phone-title">01b — Login Loading / Biometric</div>
+        <div class="phone">
+          <div class="status-bar">
+            <div class="notch"></div>
+            <span>9:41</span>
+            <div class="status-icons"><span>●●●</span><span>WiFi</span><span>🔋</span></div>
+          </div>
+          <div class="login-header">
+            <img src="pkp-logo-dark.png" alt="PKP" style="height:44px;margin-bottom:10px;" />
+            <div style="font-size:24px;font-weight:900;color:#F7B731;letter-spacing:4px;">APEX</div>
+          </div>
+          <div style="padding:32px 20px;background:var(--bg-2);text-align:center;">
+            <div style="font-size:64px;margin-bottom:16px;">👆</div>
+            <div style="font-size:17px;font-weight:700;margin-bottom:8px;">Selamat datang kembali,</div>
+            <div style="font-size:20px;font-weight:800;color:var(--primary);margin-bottom:6px;">Hariman</div>
+            <div class="text-sm text-muted" style="margin-bottom:28px;">Gunakan sidik jari atau Face ID untuk masuk</div>
+
+            <div style="width:80px;height:80px;border-radius:50%;border:3px solid var(--primary);display:flex;align-items:center;justify-content:center;margin:0 auto 24px;background:rgba(41,171,226,.08);">
+              <span style="font-size:40px;">🔐</span>
+            </div>
+
+            <div class="text-sm text-primary" style="cursor:pointer;margin-bottom:20px;">Gunakan password</div>
+
+            <div class="btn btn-outline">Ganti Akun</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════
+       SCREEN 2: DASHBOARD
+  ══════════════════════════════════════════ -->
+  <div class="screen-group" id="screen-dashboard">
+    <div class="screens-row">
+      <div class="phone-wrap">
+        <div class="phone-title">02 — Dashboard / Home</div>
+        <div class="phone">
+          <div class="status-bar">
+            <div class="notch"></div><span>9:41</span>
+            <div class="status-icons"><span>●●●</span><span>WiFi</span><span>🔋</span></div>
+          </div>
+
+          <!-- Gradient Header -->
+          <div style="background:linear-gradient(175deg,#020810 0%,#04101E 45%,#071828 100%);padding:16px 16px 20px;border-bottom:1px solid rgba(41,171,226,.15);">
+            <div class="row between" style="margin-bottom:14px;">
+              <div class="row" style="gap:10px;">
+                <div class="avatar" style="background:rgba(255,255,255,.2);">H</div>
+                <div>
+                  <div style="font-size:12px;color:rgba(255,255,255,.7);">Selamat pagi,</div>
+                  <div style="font-size:15px;font-weight:700;color:#E2E8F0;">Hariman 👋</div>
+                </div>
+              </div>
+              <div class="row" style="gap:8px;">
+                <div style="position:relative;">
+                  <div class="action-btn" style="background:rgba(255,255,255,.15);width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;">🔔</div>
+                  <div style="position:absolute;top:-2px;right:-2px;width:14px;height:14px;background:#FF5722;border-radius:50%;border:2px solid #29ABE2;display:flex;align-items:center;justify-content:center;font-size:8px;color:#E2E8F0;font-weight:700;">3</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Pipeline overview card -->
+            <div style="background:rgba(0,0,0,.35);border:1px solid rgba(41,171,226,.2);border-radius:14px;padding:14px;backdrop-filter:blur(8px);">
+              <div style="font-size:11px;color:rgba(255,255,255,.5);margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px;">Pipeline Bulan Ini</div>
+              <div style="font-size:24px;font-weight:800;color:#E2E8F0;margin-bottom:4px;">Rp 2,4M</div>
+              <div class="row between">
+                <div>
+                  <div style="font-size:11px;color:rgba(255,255,255,.45);">Target: Rp 4M</div>
+                  <div class="progress-wrap" style="width:160px;height:5px;background:rgba(255,255,255,.1);margin-top:6px;">
+                    <div class="progress-fill" style="width:60%;background:#29ABE2;"></div>
+                  </div>
+                </div>
+                <div style="text-align:right;">
+                  <div style="font-size:18px;font-weight:800;color:#69D96D;">60%</div>
+                  <div style="font-size:11px;color:rgba(255,255,255,.45);">tercapai</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="scroll-body">
+            <!-- Quick Stats -->
+            <div class="section">
+              <div class="stats-grid">
+                <div class="stat-card">
+                  <div style="font-size:20px;margin-bottom:4px;">📋</div>
+                  <div class="stat-value">18</div>
+                  <div class="stat-label">Leads Aktif</div>
+                </div>
+                <div class="stat-card" style="border-left:3px solid var(--red);">
+                  <div style="font-size:20px;margin-bottom:4px;">⚠️</div>
+                  <div class="stat-value" style="color:var(--red);">4</div>
+                  <div class="stat-label">Follow-up Overdue</div>
+                </div>
+                <div class="stat-card" style="border-left:3px solid var(--green);">
+                  <div style="font-size:20px;margin-bottom:4px;">🏆</div>
+                  <div class="stat-value" style="color:var(--green);">3</div>
+                  <div class="stat-label">Won Bulan Ini</div>
+                </div>
+                <div class="stat-card" style="border-left:3px solid var(--orange);">
+                  <div style="font-size:20px;margin-bottom:4px;">📅</div>
+                  <div class="stat-value" style="color:var(--orange);">7</div>
+                  <div class="stat-label">FU Hari Ini</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Today Agenda -->
+            <div class="section" style="padding-top:0;">
+              <div class="section-title">Agenda Hari Ini</div>
+
+              <div class="swipe-hint">
+                <span>👈</span>
+                <span>Swipe kiri untuk aksi cepat</span>
+              </div>
+
+              <!-- Overdue item -->
+              <div class="card" style="border-left:3px solid var(--red);">
+                <div class="row between" style="margin-bottom:6px;">
+                  <div class="row" style="gap:8px;">
+                    <div class="avatar avatar-sm" style="background:rgba(244,67,54,.12);color:var(--red);">PT</div>
+                    <div>
+                      <div class="text-bold" style="font-size:14px;">PT Maju Jaya</div>
+                      <div class="text-xs text-muted">ERP Solutions</div>
+                    </div>
+                  </div>
+                  <div class="col" style="align-items:flex-end;">
+                    <div class="badge-tag tag-red">Overdue</div>
+                    <div class="text-xs text-muted" style="margin-top:3px;">Kemarin</div>
+                  </div>
+                </div>
+                <div class="divider"></div>
+                <div class="row" style="gap:6px;margin-top:6px;">
+                  <span class="badge-tag tag-blue">Negotiation</span>
+                  <span class="text-xs text-muted">Rp 250 jt</span>
+                </div>
+              </div>
+
+              <!-- Normal item -->
+              <div class="card" style="border-left:3px solid var(--orange);">
+                <div class="row between" style="margin-bottom:6px;">
+                  <div class="row" style="gap:8px;">
+                    <div class="avatar avatar-sm" style="background:rgba(255,140,66,.12);color:var(--orange);">CV</div>
+                    <div>
+                      <div class="text-bold" style="font-size:14px;">CV Berkah Makmur</div>
+                      <div class="text-xs text-muted">CCTV & Security</div>
+                    </div>
+                  </div>
+                  <div class="col" style="align-items:flex-end;">
+                    <div class="badge-tag tag-orange">Hari Ini</div>
+                    <div class="text-xs text-muted" style="margin-top:3px;">10:00</div>
+                  </div>
+                </div>
+                <div class="divider"></div>
+                <div class="row" style="gap:6px;margin-top:6px;">
+                  <span class="badge-tag tag-orange">Proposal Sent</span>
+                  <span class="text-xs text-muted">Rp 85 jt</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Mini Chart -->
+            <div class="section" style="padding-top:0;">
+              <div class="section-title">Performa Minggu Ini</div>
+              <div class="card">
+                <div class="chart-bars" style="margin-bottom:26px;">
+                  <div class="chart-bar" style="height:40%"><span class="bar-val">2</span><span class="bar-label">Sen</span></div>
+                  <div class="chart-bar" style="height:70%"><span class="bar-val">5</span><span class="bar-label">Sel</span></div>
+                  <div class="chart-bar active" style="height:55%"><span class="bar-val">4</span><span class="bar-label">Rab</span></div>
+                  <div class="chart-bar" style="height:85%"><span class="bar-val">6</span><span class="bar-label">Kam</span></div>
+                  <div class="chart-bar" style="height:30%"><span class="bar-val">2</span><span class="bar-label">Jum</span></div>
+                  <div class="chart-bar" style="height:15%;background:var(--bg-4)"><span class="bar-val" style="color:var(--text-muted);">-</span><span class="bar-label">Sab</span></div>
+                  <div class="chart-bar" style="height:10%;background:var(--bg-4)"><span class="bar-val" style="color:var(--text-muted);">-</span><span class="bar-label">Min</span></div>
+                </div>
+                <div class="row between">
+                  <div class="text-xs text-muted">Total FU Minggu Ini</div>
+                  <div class="text-sm text-bold text-primary">19 follow-up</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Bottom Nav -->
+          <div class="bottom-nav">
+            <div class="nav-item active"><span class="nav-icon">🏠</span>Home<div class="nav-dot"></div></div>
+            <div class="nav-item"><span class="nav-icon">📋</span>Pipeline</div>
+            <div class="nav-item"><span class="nav-icon">📅</span>Jadwal</div>
+            <div class="nav-item"><span class="nav-icon">📍</span>Check-in</div>
+            <div class="nav-item"><span class="nav-icon">👤</span>Profil</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════
+       SCREEN 3: PIPELINE LIST
+  ══════════════════════════════════════════ -->
+  <div class="screen-group" id="screen-pipeline">
+    <div class="screens-row">
+      <div class="phone-wrap">
+        <div class="phone-title">03 — Pipeline List</div>
+        <div class="phone">
+          <div class="status-bar">
+            <div class="notch"></div><span>9:41</span>
+            <div class="status-icons"><span>●●●</span><span>WiFi</span><span>🔋</span></div>
+          </div>
+
+          <div class="app-bar">
+            <div>
+              <span class="title">Pipeline</span>
+              <span class="subtitle">18 leads aktif · Rp 2,4M</span>
+            </div>
+            <div class="action-btn">🔍</div>
+          </div>
+
+          <div style="background:var(--bg-3);padding:12px 14px;border-bottom:1px solid var(--border);">
+            <div class="search-bar" style="margin-bottom:10px;">
+              <span class="search-icon">🔍</span>
+              <span class="search-placeholder">Cari nama perusahaan...</span>
+            </div>
+            <div class="chips">
+              <div class="chip active">Semua</div>
+              <div class="chip">New</div>
+              <div class="chip">In Progress</div>
+              <div class="chip">Proposal</div>
+              <div class="chip">Nego</div>
+            </div>
+          </div>
+
+          <div class="swipe-hint" style="margin:10px 14px 0;">
+            <span>👈</span><span>Swipe kiri: FU cepat · Update stage · Hubungi</span>
+          </div>
+
+          <div class="scroll-body" style="max-height:520px;">
+            <!-- Lead item 1 -->
+            <div class="list-item">
+              <div class="row between" style="margin-bottom:6px;">
+                <div class="row" style="gap:8px;">
+                  <div class="avatar avatar-sm" style="background:rgba(41,171,226,.08);color:#0E87BF;">PT</div>
+                  <div>
+                    <div class="text-semibold" style="font-size:14px;">PT Sukses Abadi</div>
+                    <div class="text-xs text-muted">ERP Enterprise</div>
+                  </div>
+                </div>
+                <div class="badge-tag tag-blue">Negotiation</div>
+              </div>
+              <div class="row between">
+                <div class="row" style="gap:6px;">
+                  <span class="text-xs text-muted">⏰ Next FU:</span>
+                  <span class="text-xs text-danger text-bold">Kemarin</span>
+                </div>
+                <div class="text-sm text-bold text-primary">Rp 450 jt</div>
+              </div>
+            </div>
+
+            <!-- Lead item 2 -->
+            <div class="list-item" style="background:rgba(247,183,49,.05);">
+              <div class="row between" style="margin-bottom:6px;">
+                <div class="row" style="gap:8px;">
+                  <div class="avatar avatar-sm" style="background:rgba(255,140,66,.12);color:var(--orange);">CV</div>
+                  <div>
+                    <div class="text-semibold" style="font-size:14px;">CV Berkah Makmur</div>
+                    <div class="text-xs text-muted">CCTV & Security</div>
+                  </div>
+                </div>
+                <div class="badge-tag tag-orange">Proposal Sent</div>
+              </div>
+              <div class="row between">
+                <div class="row" style="gap:6px;">
+                  <span class="text-xs text-muted">⏰ Next FU:</span>
+                  <span class="text-xs text-warning text-bold">Hari Ini</span>
+                </div>
+                <div class="text-sm text-bold text-primary">Rp 85 jt</div>
+              </div>
+            </div>
+
+            <!-- Lead item 3 -->
+            <div class="list-item">
+              <div class="row between" style="margin-bottom:6px;">
+                <div class="row" style="gap:8px;">
+                  <div class="avatar avatar-sm" style="background:rgba(76,175,80,.12);color:var(--green);">TB</div>
+                  <div>
+                    <div class="text-semibold" style="font-size:14px;">Toko Budi Elektronik</div>
+                    <div class="text-xs text-muted">POS System</div>
+                  </div>
+                </div>
+                <div class="badge-tag tag-green">Won</div>
+              </div>
+              <div class="row between">
+                <div class="row" style="gap:6px;">
+                  <span class="text-xs text-muted">✅ Closed:</span>
+                  <span class="text-xs text-success text-bold">5 Jun 2026</span>
+                </div>
+                <div class="text-sm text-bold" style="color:var(--green);">Rp 120 jt</div>
+              </div>
+            </div>
+
+            <!-- Lead item 4 -->
+            <div class="list-item">
+              <div class="row between" style="margin-bottom:6px;">
+                <div class="row" style="gap:8px;">
+                  <div class="avatar avatar-sm" style="background:rgba(156,111,228,.12);color:var(--purple);">RM</div>
+                  <div>
+                    <div class="text-semibold" style="font-size:14px;">RM Padang Selera</div>
+                    <div class="text-xs text-muted">Kasir & Inventory</div>
+                  </div>
+                </div>
+                <div class="badge-tag tag-gray">New</div>
+              </div>
+              <div class="row between">
+                <div class="row" style="gap:6px;">
+                  <span class="text-xs text-muted">⏰ Next FU:</span>
+                  <span class="text-xs text-muted">12 Jun 2026</span>
+                </div>
+                <div class="text-sm text-bold text-primary">Rp 35 jt</div>
+              </div>
+            </div>
+
+            <!-- Lead item 5 -->
+            <div class="list-item">
+              <div class="row between" style="margin-bottom:6px;">
+                <div class="row" style="gap:8px;">
+                  <div class="avatar avatar-sm" style="background:rgba(41,171,226,.08);color:#0E87BF;">KL</div>
+                  <div>
+                    <div class="text-semibold" style="font-size:14px;">Klinik Sehat Bersama</div>
+                    <div class="text-xs text-muted">Healthcare IT</div>
+                  </div>
+                </div>
+                <div class="badge-tag tag-blue">In Progress</div>
+              </div>
+              <div class="row between">
+                <div class="row" style="gap:6px;">
+                  <span class="text-xs text-muted">⏰ Next FU:</span>
+                  <span class="text-xs text-muted">15 Jun 2026</span>
+                </div>
+                <div class="text-sm text-bold text-primary">Rp 180 jt</div>
+              </div>
+            </div>
+
+            <div style="padding:10px;text-align:center;">
+              <span class="text-sm text-muted">+ 13 leads lainnya</span>
+            </div>
+          </div>
+
+          <!-- FAB -->
+          <div class="fab">＋</div>
+
+          <div class="bottom-nav">
+            <div class="nav-item"><span class="nav-icon">🏠</span>Home</div>
+            <div class="nav-item active"><span class="nav-icon">📋</span>Pipeline<div class="nav-dot"></div></div>
+            <div class="nav-item"><span class="nav-icon">📅</span>Jadwal</div>
+            <div class="nav-item"><span class="nav-icon">📍</span>Check-in</div>
+            <div class="nav-item"><span class="nav-icon">👤</span>Profil</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="phone-wrap">
+        <div class="phone-title">03b — Swipe Action</div>
+        <div class="phone">
+          <div class="status-bar">
+            <div class="notch"></div><span>9:41</span>
+            <div class="status-icons"><span>●●●</span><span>WiFi</span><span>🔋</span></div>
+          </div>
+          <div class="app-bar">
+            <div>
+              <span class="title">Pipeline</span>
+              <span class="subtitle">Swipe action</span>
+            </div>
+          </div>
+
+          <div style="padding:16px;background:var(--bg);">
+            <div class="text-xs text-muted text-center" style="margin-bottom:12px;">↓ Contoh saat item di-swipe kiri ↓</div>
+
+            <!-- Normal item -->
+            <div style="position:relative;border-radius:12px;overflow:hidden;margin-bottom:16px;box-shadow:0 2px 8px rgba(0,0,0,.1);">
+              <!-- Action background -->
+              <div style="position:absolute;right:0;top:0;bottom:0;display:flex;">
+                <div style="background:#29ABE2;width:72px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer;">
+                  <span style="font-size:18px;">📝</span>
+                  <span style="font-size:10px;color:#E2E8F0;font-weight:600;">Follow-Up</span>
+                </div>
+                <div style="background:#FF8F00;width:72px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer;">
+                  <span style="font-size:18px;">🔄</span>
+                  <span style="font-size:10px;color:#E2E8F0;font-weight:600;">Stage</span>
+                </div>
+                <div style="background:#1a5c1e;width:72px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer;">
+                  <span style="font-size:18px;">📞</span>
+                  <span style="font-size:10px;color:#E2E8F0;font-weight:600;">Hubungi</span>
+                </div>
+              </div>
+              <!-- Card shifted left -->
+              <div style="background:var(--bg-2);padding:14px;transform:translateX(-216px);position:relative;z-index:1;">
+                <div class="row between" style="margin-bottom:6px;">
+                  <div class="row" style="gap:8px;">
+                    <div class="avatar avatar-sm" style="background:rgba(41,171,226,.08);color:#0E87BF;">PT</div>
+                    <div>
+                      <div class="text-semibold" style="font-size:14px;">PT Sukses Abadi</div>
+                      <div class="text-xs text-muted">ERP Enterprise</div>
+                    </div>
+                  </div>
+                  <div class="badge-tag tag-blue">Negotiation</div>
+                </div>
+                <div class="text-xs text-danger">⚠️ Overdue kemarin</div>
+              </div>
+            </div>
+
+            <!-- Stage update bottom sheet preview -->
+            <div style="background:#0E1E30;border-radius:16px 16px 0 0;padding:16px;box-shadow:0 -4px 20px rgba(0,0,0,.15);margin-top:20px;">
+              <div style="width:40px;height:4px;background:var(--border);border-radius:2px;margin:0 auto 14px;"></div>
+              <div class="text-bold" style="font-size:15px;margin-bottom:12px;">Update Stage</div>
+              <div style="display:flex;flex-direction:column;gap:8px;">
+                <div style="padding:11px 14px;border-radius:10px;border:1.5px solid var(--border-2);background:var(--bg-3);font-size:14px;color:var(--text);cursor:pointer;">🔵 New</div>
+                <div style="padding:11px 14px;border-radius:10px;border:1.5px solid var(--border-2);background:var(--bg-3);font-size:14px;color:var(--text);cursor:pointer;">🟡 In Progress</div>
+                <div style="padding:11px 14px;border-radius:10px;border:1.5px solid var(--primary);background:rgba(41,171,226,.08);font-size:14px;cursor:pointer;font-weight:600;color:var(--primary);">🔷 Negotiation ✓ (aktif)</div>
+                <div style="padding:11px 14px;border-radius:10px;border:1.5px solid var(--border-2);background:var(--bg-3);font-size:14px;color:var(--text);cursor:pointer;">🟢 Won</div>
+                <div style="padding:11px 14px;border-radius:10px;border:1.5px solid var(--border-2);background:var(--bg-3);font-size:14px;color:var(--text);cursor:pointer;">🔴 Lost</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════
+       SCREEN 4: DETAIL LEAD
+  ══════════════════════════════════════════ -->
+  <div class="screen-group" id="screen-detail">
+    <div class="screens-row">
+      <div class="phone-wrap">
+        <div class="phone-title">04 — Detail Lead</div>
+        <div class="phone">
+          <div class="status-bar">
+            <div class="notch"></div><span>9:41</span>
+            <div class="status-icons"><span>●●●</span><span>WiFi</span><span>🔋</span></div>
+          </div>
+
+          <div class="app-bar">
+            <span>←</span>
+            <div style="flex:1;">
+              <span class="title">Detail Lead</span>
+            </div>
+            <div class="action-btn">✏️</div>
+          </div>
+
+          <div class="scroll-body" style="max-height:620px;">
+            <!-- Hero Card -->
+            <div style="background:linear-gradient(135deg,#0A1628,#0E87BF);padding:18px 16px;">
+              <div class="row" style="gap:12px;margin-bottom:12px;">
+                <div class="avatar" style="background:rgba(255,255,255,.2);width:50px;height:50px;font-size:18px;">PT</div>
+                <div>
+                  <div style="font-size:17px;font-weight:800;color:#E2E8F0;">PT Sukses Abadi</div>
+                  <div style="font-size:12px;color:rgba(255,255,255,.7);">ERP Enterprise Solutions</div>
+                </div>
+              </div>
+              <div class="row" style="gap:8px;">
+                <div class="badge-tag" style="background:rgba(255,255,255,.2);color:#E2E8F0;">🔷 Negotiation</div>
+                <div class="badge-tag" style="background:rgba(255,255,255,.2);color:#E2E8F0;">🔴 High Priority</div>
+              </div>
+            </div>
+
+            <!-- Value & Action -->
+            <div style="background:var(--bg-2);padding:14px 16px;border-bottom:1px solid var(--border);">
+              <div class="row between">
+                <div>
+                  <div class="text-xs text-muted">Propose Value</div>
+                  <div style="font-size:20px;font-weight:800;color:var(--primary);">Rp 450.000.000</div>
+                </div>
+                <div class="row" style="gap:8px;">
+                  <div class="btn btn-sm" style="background:#1a7a43;color:#E2E8F0;">💬 WA</div>
+                  <div class="btn btn-sm">📞 Call</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Info Grid -->
+            <div class="section">
+              <div class="section-title">Informasi Lead</div>
+              <div class="card" style="padding:0;overflow:hidden;">
+                <div style="display:grid;grid-template-columns:1fr 1fr;">
+                  <div style="padding:12px;border-right:1px solid var(--border);border-bottom:1px solid var(--border);">
+                    <div class="text-xs text-muted">Sales Owner</div>
+                    <div class="text-sm text-bold">Hariman</div>
+                  </div>
+                  <div style="padding:12px;border-bottom:1px solid var(--border);">
+                    <div class="text-xs text-muted">Organisasi</div>
+                    <div class="text-sm text-bold">PKP-JKT</div>
+                  </div>
+                  <div style="padding:12px;border-right:1px solid var(--border);border-bottom:1px solid var(--border);">
+                    <div class="text-xs text-muted">Produk</div>
+                    <div class="text-sm text-bold">ERP Solutions</div>
+                  </div>
+                  <div style="padding:12px;border-bottom:1px solid var(--border);">
+                    <div class="text-xs text-muted">Est. Closing</div>
+                    <div class="text-sm text-bold text-warning">30 Jun 2026</div>
+                  </div>
+                  <div style="padding:12px;border-right:1px solid var(--border);">
+                    <div class="text-xs text-muted">Next FU</div>
+                    <div class="text-sm text-bold text-danger">OVERDUE</div>
+                  </div>
+                  <div style="padding:12px;">
+                    <div class="text-xs text-muted">Lead ID</div>
+                    <div class="text-sm text-bold text-muted">LD-2026-0042</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="section" style="padding-top:0;">
+              <div class="btn" style="margin-bottom:10px;">📝 Catat Follow-Up</div>
+              <div class="btn btn-outline">📅 Set Reminder FU Berikutnya</div>
+            </div>
+
+            <!-- Follow-up Timeline -->
+            <div class="section" style="padding-top:0;">
+              <div class="section-title">Riwayat Follow-Up</div>
+
+              <div class="timeline-item">
+                <div class="timeline-dot-wrap">
+                  <div class="timeline-dot" style="background:var(--green);"></div>
+                  <div class="timeline-line"></div>
+                </div>
+                <div class="card-sm flex1" style="margin-bottom:0;">
+                  <div class="row between">
+                    <div class="badge-tag tag-green" style="font-size:10px;">Meeting</div>
+                    <div class="text-xs text-muted">3 Jun 2026</div>
+                  </div>
+                  <div class="text-sm" style="margin-top:6px;">Presentasi demo ERP dilakukan. Client tertarik, minta revisi proposal harga.</div>
+                </div>
+              </div>
+
+              <div class="timeline-item">
+                <div class="timeline-dot-wrap">
+                  <div class="timeline-dot" style="background:var(--primary);"></div>
+                  <div class="timeline-line"></div>
+                </div>
+                <div class="card-sm flex1" style="margin-bottom:0;">
+                  <div class="row between">
+                    <div class="badge-tag tag-blue" style="font-size:10px;">Telepon</div>
+                    <div class="text-xs text-muted">28 Mei 2026</div>
+                  </div>
+                  <div class="text-sm" style="margin-top:6px;">Konfirmasi kebutuhan modul: keuangan, HR, inventory.</div>
+                </div>
+              </div>
+
+              <div class="timeline-item">
+                <div class="timeline-dot-wrap">
+                  <div class="timeline-dot" style="background:#90CAF9;"></div>
+                </div>
+                <div class="card-sm flex1" style="margin-bottom:0;">
+                  <div class="row between">
+                    <div class="badge-tag tag-gray" style="font-size:10px;">Email</div>
+                    <div class="text-xs text-muted">20 Mei 2026</div>
+                  </div>
+                  <div class="text-sm" style="margin-top:6px;">Kirim brosur produk dan jadwal demo.</div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════
+       SCREEN 5: FOLLOW-UP
+  ══════════════════════════════════════════ -->
+  <div class="screen-group" id="screen-followup">
+    <div class="screens-row">
+      <div class="phone-wrap">
+        <div class="phone-title">05 — Form Follow-Up</div>
+        <div class="phone">
+          <div class="status-bar">
+            <div class="notch"></div><span>9:41</span>
+            <div class="status-icons"><span>●●●</span><span>WiFi</span><span>🔋</span></div>
+          </div>
+
+          <div class="app-bar">
+            <span>✕</span>
+            <div style="flex:1;padding-left:10px;">
+              <span class="title">Catat Follow-Up</span>
+              <span class="subtitle">PT Sukses Abadi</span>
+            </div>
+            <div class="btn btn-sm" style="background:transparent;color:#E2E8F0;border:1px solid rgba(255,255,255,.4);">Simpan</div>
+          </div>
+
+          <div class="scroll-body" style="max-height:620px;padding:16px;">
+
+            <!-- Tipe FU -->
+            <div class="input-label">Tipe Follow-Up</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px;">
+              <div style="padding:12px;border-radius:10px;border:2px solid var(--primary);background:rgba(41,171,226,.08);text-align:center;cursor:pointer;">
+                <div style="font-size:22px;margin-bottom:4px;">📞</div>
+                <div class="text-sm text-bold text-primary">Telepon</div>
+              </div>
+              <div style="padding:12px;border-radius:10px;border:1.5px solid var(--border);background:var(--bg-2);text-align:center;cursor:pointer;">
+                <div style="font-size:22px;margin-bottom:4px;">🤝</div>
+                <div class="text-sm text-muted">Meeting</div>
+              </div>
+              <div style="padding:12px;border-radius:10px;border:1.5px solid var(--border);background:var(--bg-2);text-align:center;cursor:pointer;">
+                <div style="font-size:22px;margin-bottom:4px;">💬</div>
+                <div class="text-sm text-muted">WhatsApp</div>
+              </div>
+              <div style="padding:12px;border-radius:10px;border:1.5px solid var(--border);background:var(--bg-2);text-align:center;cursor:pointer;">
+                <div style="font-size:22px;margin-bottom:4px;">📧</div>
+                <div class="text-sm text-muted">Email</div>
+              </div>
+            </div>
+
+            <!-- Tanggal -->
+            <div class="input-label">Tanggal & Waktu</div>
+            <div class="input-field row between" style="margin-bottom:16px;">
+              <span>📅 10 Juni 2026, 10:30</span>
+              <span style="color:var(--text-muted);">▼</span>
+            </div>
+
+            <!-- Hasil -->
+            <div class="input-label">Hasil Follow-Up</div>
+            <div style="border:1.5px solid var(--primary);border-radius:10px;padding:12px;background:var(--bg-3);min-height:90px;margin-bottom:16px;font-size:14px;color:var(--text-muted);">
+              Client setuju untuk meeting presentasi minggu depan. Butuh revisi harga untuk modul HR...
+              <span style="opacity:.4;">|</span>
+            </div>
+
+            <!-- Voice Note -->
+            <div style="background:rgba(41,171,226,.08);border-radius:10px;padding:12px;margin-bottom:16px;display:flex;align-items:center;gap:10px;">
+              <div style="width:40px;height:40px;background:var(--primary);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;cursor:pointer;">🎤</div>
+              <div>
+                <div class="text-sm text-bold text-primary">Voice Note</div>
+                <div class="text-xs text-muted">Rekam suara sebagai catatan</div>
+              </div>
+            </div>
+
+            <!-- Update Stage -->
+            <div class="toggle-row;background:var(--bg-3);border-radius:10px;padding:12px 14px;margin-bottom:16px;">
+              <div>
+                <div class="text-sm text-bold">Update Stage Lead</div>
+                <div class="text-xs text-muted">Ganti stage setelah FU ini</div>
+              </div>
+              <div class="toggle on"></div>
+            </div>
+
+            <div class="input-field row between" style="margin-bottom:16px;">
+              <span>🔷 Negotiation → Won</span>
+              <span style="color:var(--text-muted);">▼</span>
+            </div>
+
+            <!-- Next FU -->
+            <div class="input-label">Jadwal Follow-Up Berikutnya</div>
+            <div class="input-field row between" style="margin-bottom:16px;">
+              <span>📅 17 Juni 2026</span>
+              <span style="color:var(--text-muted);">▼</span>
+            </div>
+
+            <div class="input-label">Agenda Berikutnya</div>
+            <div style="border:1.5px solid var(--border-2);border-radius:10px;padding:12px;background:var(--bg-3);min-height:60px;margin-bottom:24px;font-size:14px;color:var(--text-muted);">
+              Presentasi revisi proposal harga...
+            </div>
+
+            <div class="btn" style="margin-bottom:10px;">💾 Simpan Follow-Up</div>
+            <div class="btn btn-outline">Batal</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="phone-wrap">
+        <div class="phone-title">05b — Jadwal / Kalender</div>
+        <div class="phone">
+          <div class="status-bar">
+            <div class="notch"></div><span>9:41</span>
+            <div class="status-icons"><span>●●●</span><span>WiFi</span><span>🔋</span></div>
+          </div>
+
+          <div class="app-bar">
+            <div><span class="title">Jadwal Follow-Up</span></div>
+          </div>
+
+          <!-- Mini Calendar -->
+          <div style="background:var(--bg-2);padding:14px 16px;border-bottom:1px solid var(--border);">
+            <div class="row between" style="margin-bottom:10px;">
+              <span style="font-size:16px;font-weight:700;">Juni 2026</span>
+              <div class="row" style="gap:8px;"><span style="cursor:pointer;">‹</span><span style="cursor:pointer;">›</span></div>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(7,1fr);text-align:center;gap:4px;">
+              <div class="text-xs text-muted">S</div><div class="text-xs text-muted">S</div><div class="text-xs text-muted">R</div><div class="text-xs text-muted">K</div><div class="text-xs text-muted">J</div><div class="text-xs text-muted">S</div><div class="text-xs text-muted">M</div>
+              <div class="text-sm text-muted" style="padding:6px;"></div>
+              <div class="text-sm text-muted" style="padding:6px;"></div>
+              <div class="text-sm text-muted" style="padding:6px;"></div>
+              <div class="text-sm text-muted" style="padding:6px;"></div>
+              <div class="text-sm text-muted" style="padding:6px;"></div>
+              <div class="text-sm" style="padding:6px;">1</div>
+              <div class="text-sm" style="padding:6px;">2</div>
+              <div class="text-sm" style="padding:6px;">3</div>
+              <div class="text-sm" style="padding:6px;">4</div>
+              <div class="text-sm" style="padding:6px;">5</div>
+              <div class="text-sm" style="padding:6px;">6</div>
+              <div class="text-sm" style="padding:6px;">7</div>
+              <div class="text-sm" style="padding:6px;">8</div>
+              <div class="text-sm" style="padding:6px;">9</div>
+              <div class="text-sm text-primary text-bold" style="padding:6px;background:rgba(41,171,226,.08);border-radius:50%;"><u>10</u></div>
+              <div class="text-sm text-danger text-bold" style="padding:6px;position:relative;">11<span style="position:absolute;bottom:2px;left:50%;transform:translateX(-50%);width:4px;height:4px;background:var(--red);border-radius:50%;"></span></div>
+              <div class="text-sm" style="padding:6px;">12</div>
+              <div class="text-sm" style="padding:6px;position:relative;">13<span style="position:absolute;bottom:2px;left:50%;transform:translateX(-50%);width:4px;height:4px;background:var(--primary);border-radius:50%;"></span></div>
+              <div class="text-sm" style="padding:6px;">14</div>
+              <div class="text-sm" style="padding:6px;">15</div>
+              <div class="text-sm" style="padding:6px;">16</div>
+              <div class="text-sm text-primary" style="padding:6px;position:relative;">17<span style="position:absolute;bottom:2px;left:50%;transform:translateX(-50%);width:4px;height:4px;background:var(--primary);border-radius:50%;"></span></div>
+              <div class="text-sm" style="padding:6px;">18</div>
+              <div class="text-sm" style="padding:6px;">19</div>
+              <div class="text-sm" style="padding:6px;">20</div>
+              <div class="text-sm" style="padding:6px;">21</div>
+            </div>
+          </div>
+
+          <div class="scroll-body" style="max-height:480px;padding:14px;">
+            <div class="section-title" style="margin-bottom:10px;">Hari Ini — 10 Juni</div>
+
+            <div class="card" style="border-left:3px solid var(--red);">
+              <div class="row between">
+                <div class="badge-tag tag-red" style="font-size:10px;">⚠️ Overdue</div>
+                <div class="text-xs text-muted">Belum selesai</div>
+              </div>
+              <div class="text-sm text-bold" style="margin-top:6px;">PT Maju Jaya</div>
+              <div class="text-xs text-muted">Konfirmasi keputusan akhir</div>
+            </div>
+
+            <div class="card" style="border-left:3px solid var(--orange);">
+              <div class="row between">
+                <div class="badge-tag tag-orange" style="font-size:10px;">10:00</div>
+                <div class="text-xs text-muted">Meeting</div>
+              </div>
+              <div class="text-sm text-bold" style="margin-top:6px;">CV Berkah Makmur</div>
+              <div class="text-xs text-muted">Demo produk CCTV</div>
+            </div>
+
+            <div class="card" style="border-left:3px solid var(--primary);">
+              <div class="row between">
+                <div class="badge-tag tag-blue" style="font-size:10px;">14:00</div>
+                <div class="text-xs text-muted">Telepon</div>
+              </div>
+              <div class="text-sm text-bold" style="margin-top:6px;">Klinik Sehat Bersama</div>
+              <div class="text-xs text-muted">Follow-up proposal Healthcare IT</div>
+            </div>
+          </div>
+
+          <div class="bottom-nav">
+            <div class="nav-item"><span class="nav-icon">🏠</span>Home</div>
+            <div class="nav-item"><span class="nav-icon">📋</span>Pipeline</div>
+            <div class="nav-item active"><span class="nav-icon">📅</span>Jadwal<div class="nav-dot"></div></div>
+            <div class="nav-item"><span class="nav-icon">📍</span>Check-in</div>
+            <div class="nav-item"><span class="nav-icon">👤</span>Profil</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════
+       SCREEN 6: CHECK-IN / CHECK-OUT
+  ══════════════════════════════════════════ -->
+  <div class="screen-group" id="screen-checkin">
+    <div class="screens-row">
+      <div class="phone-wrap">
+        <div class="phone-title">06 — Field Check-in</div>
+        <div class="phone">
+          <div class="status-bar">
+            <div class="notch"></div><span>9:41</span>
+            <div class="status-icons"><span>●●●</span><span>WiFi</span><span>🔋</span></div>
+          </div>
+
+          <div class="app-bar">
+            <div><span class="title">Field Activity</span><span class="subtitle">Kunjungan & Check-in</span></div>
+          </div>
+
+          <div class="scroll-body" style="max-height:630px;padding:16px;">
+
+            <!-- GPS Status -->
+            <div style="background:linear-gradient(135deg,#0D2B14,#1a5c1e);border-radius:14px;padding:16px;margin-bottom:16px;">
+              <div class="row" style="gap:10px;margin-bottom:12px;">
+                <div style="width:40px;height:40px;background:rgba(255,255,255,.2);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:20px;">📍</div>
+                <div>
+                  <div style="font-size:12px;color:rgba(255,255,255,.75);">Lokasi Terdeteksi</div>
+                  <div style="font-size:14px;font-weight:700;color:#E2E8F0;">Jl. Sudirman No. 42, Jakarta</div>
+                </div>
+              </div>
+              <div class="row between">
+                <div style="font-size:11px;color:rgba(255,255,255,.7);">GPS Aktif · Akurasi 8m</div>
+                <div style="font-size:11px;color:rgba(255,255,255,.7);">10:28 WIB</div>
+              </div>
+            </div>
+
+            <!-- Map placeholder -->
+            <div class="map-placeholder" style="height:150px;margin-bottom:16px;">
+              <div class="map-pin">📍</div>
+              <div class="text-sm text-bold" style="color:var(--green);">Peta Lokasi</div>
+              <div class="text-xs" style="color:var(--green);">OpenStreetMap · Real-time</div>
+            </div>
+
+            <!-- Pilih Lead untuk Check-in -->
+            <div class="input-label">Client yang Dikunjungi</div>
+            <div class="input-field row between" style="margin-bottom:16px;border-color:var(--primary);">
+              <span>📋 PT Sukses Abadi</span>
+              <span style="color:var(--text-muted);">▼</span>
+            </div>
+
+            <!-- Check-in Button -->
+            <div class="btn btn-success" style="margin-bottom:12px;display:flex;align-items:center;justify-content:center;gap:8px;font-size:16px;">
+              <span>📍</span> CHECK-IN Sekarang
+            </div>
+
+            <div style="background:var(--bg-4);border-radius:10px;padding:10px 12px;margin-bottom:16px;text-align:center;">
+              <div class="text-xs text-muted">atau</div>
+            </div>
+
+            <!-- Active Check-in preview (sedang berlangsung) -->
+            <div style="background:rgba(76,175,80,.12);border:1.5px solid #81C784;border-radius:12px;padding:14px;margin-bottom:16px;">
+              <div class="row between" style="margin-bottom:8px;">
+                <div class="row" style="gap:6px;">
+                  <span style="font-size:18px;">🟢</span>
+                  <div class="text-sm text-bold" style="color:var(--green);">Sedang Check-in</div>
+                </div>
+                <div style="background:var(--green);color:#E2E8F0;font-size:12px;font-weight:600;padding:4px 10px;border-radius:20px;">01:23:45</div>
+              </div>
+              <div class="text-sm" style="margin-bottom:6px;">CV Berkah Makmur</div>
+              <div class="text-xs text-muted">Check-in: 09:04 WIB · Jl. Thamrin No. 8</div>
+              <div class="divider"></div>
+              <div class="btn btn-danger btn-sm" style="width:100%;margin-top:8px;text-align:center;">⬛ CHECK-OUT & Simpan Catatan</div>
+            </div>
+
+            <!-- Riwayat Kunjungan Hari Ini -->
+            <div class="section-title">Kunjungan Hari Ini</div>
+            <div class="card-sm">
+              <div class="row between">
+                <div class="row" style="gap:8px;">
+                  <span>✅</span>
+                  <div>
+                    <div class="text-sm text-bold">PT Maju Jaya</div>
+                    <div class="text-xs text-muted">08:30 – 09:15 · 45 menit</div>
+                  </div>
+                </div>
+                <div class="badge-tag tag-green" style="font-size:10px;">Selesai</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="bottom-nav">
+            <div class="nav-item"><span class="nav-icon">🏠</span>Home</div>
+            <div class="nav-item"><span class="nav-icon">📋</span>Pipeline</div>
+            <div class="nav-item"><span class="nav-icon">📅</span>Jadwal</div>
+            <div class="nav-item active"><span class="nav-icon">📍</span>Check-in<div class="nav-dot"></div></div>
+            <div class="nav-item"><span class="nav-icon">👤</span>Profil</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="phone-wrap">
+        <div class="phone-title">06b — Check-Out & Catatan</div>
+        <div class="phone">
+          <div class="status-bar">
+            <div class="notch"></div><span>9:41</span>
+            <div class="status-icons"><span>●●●</span><span>WiFi</span><span>🔋</span></div>
+          </div>
+
+          <div class="app-bar">
+            <span>✕</span>
+            <div style="flex:1;padding-left:10px;">
+              <span class="title">Selesaikan Kunjungan</span>
+            </div>
+          </div>
+
+          <div class="scroll-body" style="max-height:630px;padding:16px;">
+
+            <!-- Summary Card -->
+            <div style="background:linear-gradient(135deg,#0A1628,#0E87BF);border-radius:14px;padding:16px;color:#E2E8F0;margin-bottom:16px;">
+              <div style="font-size:13px;opacity:.75;margin-bottom:6px;">Kunjungan ke</div>
+              <div style="font-size:18px;font-weight:800;margin-bottom:10px;">CV Berkah Makmur</div>
+              <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:center;">
+                <div style="background:rgba(255,255,255,.1);border-radius:8px;padding:8px;">
+                  <div style="font-size:16px;font-weight:800;">01:24</div>
+                  <div style="font-size:10px;opacity:.7;">Durasi</div>
+                </div>
+                <div style="background:rgba(255,255,255,.1);border-radius:8px;padding:8px;">
+                  <div style="font-size:16px;font-weight:800;">09:04</div>
+                  <div style="font-size:10px;opacity:.7;">Check-in</div>
+                </div>
+                <div style="background:rgba(255,255,255,.1);border-radius:8px;padding:8px;">
+                  <div style="font-size:16px;font-weight:800;">10:28</div>
+                  <div style="font-size:10px;opacity:.7;">Check-out</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Form catatan -->
+            <div class="input-label">Hasil Kunjungan</div>
+            <div style="border:1.5px solid var(--primary);border-radius:10px;padding:12px;background:var(--bg-3);min-height:90px;margin-bottom:14px;font-size:14px;">
+              Demo produk CCTV berjalan lancar. Client minta proposal...
+              <span style="opacity:.4;">|</span>
+            </div>
+
+            <!-- Voice & Photo -->
+            <div class="row" style="gap:8px;margin-bottom:16px;">
+              <div style="flex:1;background:rgba(41,171,226,.08);border-radius:10px;padding:12px;text-align:center;cursor:pointer;">
+                <div style="font-size:24px;margin-bottom:4px;">🎤</div>
+                <div class="text-xs text-bold text-primary">Voice Note</div>
+              </div>
+              <div style="flex:1;background:rgba(76,175,80,.12);border-radius:10px;padding:12px;text-align:center;cursor:pointer;">
+                <div style="font-size:24px;margin-bottom:4px;">📷</div>
+                <div class="text-xs text-bold" style="color:var(--green);">Foto Bukti</div>
+              </div>
+            </div>
+
+            <!-- Catat FU -->
+            <div class="toggle-row;background:var(--bg-3);border-radius:10px;padding:12px 14px;margin-bottom:14px;">
+              <div>
+                <div class="text-sm text-bold">Catat sebagai Follow-Up</div>
+                <div class="text-xs text-muted">Simpan juga ke riwayat FU lead</div>
+              </div>
+              <div class="toggle on"></div>
+            </div>
+
+            <div class="btn" style="margin-bottom:10px;">✅ Selesaikan & Simpan</div>
+            <div class="btn btn-outline">Lanjutkan Kunjungan</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════
+       SCREEN 7: KONTAK
+  ══════════════════════════════════════════ -->
+  <div class="screen-group" id="screen-contacts">
+    <div class="screens-row">
+      <div class="phone-wrap">
+        <div class="phone-title">07 — Kontak & Direktori</div>
+        <div class="phone">
+          <div class="status-bar">
+            <div class="notch"></div><span>9:41</span>
+            <div class="status-icons"><span>●●●</span><span>WiFi</span><span>🔋</span></div>
+          </div>
+
+          <div class="app-bar">
+            <div><span class="title">Kontak</span><span class="subtitle">48 kontak tersinkron</span></div>
+            <div class="action-btn">➕</div>
+          </div>
+
+          <div style="padding:12px 14px;background:var(--bg-2);border-bottom:1px solid var(--border);">
+            <div class="search-bar" style="margin-bottom:0;">
+              <span class="search-icon">🔍</span>
+              <span class="search-placeholder">Cari nama, perusahaan...</span>
+              <span style="font-size:14px;color:var(--primary);">Filter</span>
+            </div>
+          </div>
+
+          <div class="scroll-body" style="max-height:560px;">
+            <!-- Section A -->
+            <div style="padding:6px 14px;background:var(--bg-3);">
+              <div class="text-xs text-muted text-bold">A</div>
+            </div>
+
+            <div class="list-item">
+              <div class="row" style="gap:10px;">
+                <div class="avatar avatar-sm" style="background:rgba(41,171,226,.08);color:#0E87BF;">AB</div>
+                <div class="flex1">
+                  <div class="text-sm text-bold">Ahmad Budi</div>
+                  <div class="text-xs text-muted">PT Abadi Sejahtera · Manager IT</div>
+                </div>
+                <div class="row" style="gap:8px;">
+                  <div style="width:32px;height:32px;background:#1a7a43;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;cursor:pointer;">💬</div>
+                  <div style="width:32px;height:32px;background:#29ABE2;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;cursor:pointer;">📞</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="list-item">
+              <div class="row" style="gap:10px;">
+                <div class="avatar avatar-sm" style="background:rgba(156,111,228,.12);color:var(--purple);">AS</div>
+                <div class="flex1">
+                  <div class="text-sm text-bold">Andi Susanto</div>
+                  <div class="text-xs text-muted">CV Anugerah · Pemilik</div>
+                </div>
+                <div class="row" style="gap:8px;">
+                  <div style="width:32px;height:32px;background:#1a7a43;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;">💬</div>
+                  <div style="width:32px;height:32px;background:#29ABE2;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;">📞</div>
+                </div>
+              </div>
+            </div>
+
+            <div style="padding:6px 14px;background:var(--bg-3);">
+              <div class="text-xs text-muted text-bold">B</div>
+            </div>
+
+            <div class="list-item">
+              <div class="row" style="gap:10px;">
+                <div class="avatar avatar-sm" style="background:rgba(76,175,80,.12);color:var(--green);">BS</div>
+                <div class="flex1">
+                  <div class="text-sm text-bold">Budi Santoso</div>
+                  <div class="text-xs text-muted">PT Berkah Mandiri · Direktur</div>
+                </div>
+                <div class="row" style="gap:8px;">
+                  <div style="width:32px;height:32px;background:#1a7a43;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;">💬</div>
+                  <div style="width:32px;height:32px;background:#29ABE2;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;">📞</div>
+                </div>
+              </div>
+            </div>
+
+            <div style="padding:6px 14px;background:var(--bg-3);">
+              <div class="text-xs text-muted text-bold">H</div>
+            </div>
+
+            <div class="list-item">
+              <div class="row" style="gap:10px;">
+                <div class="avatar avatar-sm" style="background:rgba(255,140,66,.12);color:var(--orange);">HS</div>
+                <div class="flex1">
+                  <div class="text-sm text-bold">Hariono Suwandi</div>
+                  <div class="text-xs text-muted">Klinik Sehat · Manajer Ops</div>
+                </div>
+                <div class="row" style="gap:8px;">
+                  <div style="width:32px;height:32px;background:#1a7a43;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;">💬</div>
+                  <div style="width:32px;height:32px;background:#29ABE2;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;">📞</div>
+                </div>
+              </div>
+            </div>
+
+            <div style="padding:20px;text-align:center;">
+              <div class="text-sm text-muted">+ 44 kontak lainnya</div>
+            </div>
+          </div>
+
+          <!-- FAB Scan Kartu Nama -->
+          <div class="fab" style="bottom:72px;background:#29ABE2;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:18px;">
+            📷
+          </div>
+
+          <div class="bottom-nav">
+            <div class="nav-item"><span class="nav-icon">🏠</span>Home</div>
+            <div class="nav-item"><span class="nav-icon">📋</span>Pipeline</div>
+            <div class="nav-item"><span class="nav-icon">📅</span>Jadwal</div>
+            <div class="nav-item"><span class="nav-icon">📍</span>Check-in</div>
+            <div class="nav-item active"><span class="nav-icon">👤</span>Profil<div class="nav-dot"></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════
+       SCREEN 8: DAILY REPORT
+  ══════════════════════════════════════════ -->
+  <div class="screen-group" id="screen-daily">
+    <div class="screens-row">
+      <div class="phone-wrap">
+        <div class="phone-title">08 — Daily Report</div>
+        <div class="phone">
+          <div class="status-bar">
+            <div class="notch"></div><span>9:41</span>
+            <div class="status-icons"><span>●●●</span><span>WiFi</span><span>🔋</span></div>
+          </div>
+
+          <div class="app-bar">
+            <div><span class="title">Laporan Harian</span><span class="subtitle">Selasa, 10 Juni 2026</span></div>
+            <div class="action-btn">📤</div>
+          </div>
+
+          <div class="scroll-body" style="max-height:630px;padding:16px;">
+
+            <!-- Auto-summary -->
+            <div style="background:linear-gradient(135deg,#0E87BF,#29ABE2);border-radius:14px;padding:14px;color:#E2E8F0;margin-bottom:16px;">
+              <div style="font-size:12px;opacity:.75;margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px;">Rekap Otomatis Hari Ini</div>
+              <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:center;">
+                <div style="background:rgba(255,255,255,.15);border-radius:8px;padding:8px;">
+                  <div style="font-size:20px;font-weight:800;">2</div>
+                  <div style="font-size:10px;opacity:.75;">Kunjungan</div>
+                </div>
+                <div style="background:rgba(255,255,255,.15);border-radius:8px;padding:8px;">
+                  <div style="font-size:20px;font-weight:800;">4</div>
+                  <div style="font-size:10px;opacity:.75;">Follow-Up</div>
+                </div>
+                <div style="background:rgba(255,255,255,.15);border-radius:8px;padding:8px;">
+                  <div style="font-size:20px;font-weight:800;">1</div>
+                  <div style="font-size:10px;opacity:.75;">Leads Baru</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Rekap Kunjungan -->
+            <div class="section-title">Kunjungan Hari Ini</div>
+            <div class="card-sm" style="margin-bottom:8px;">
+              <div class="row between">
+                <div><div class="text-sm text-bold">PT Maju Jaya</div><div class="text-xs text-muted">08:30 – 09:15 · 45 menit</div></div>
+                <div class="badge-tag tag-green" style="font-size:10px;">✅ Selesai</div>
+              </div>
+            </div>
+            <div class="card-sm" style="margin-bottom:16px;">
+              <div class="row between">
+                <div><div class="text-sm text-bold">CV Berkah Makmur</div><div class="text-xs text-muted">09:04 – 10:28 · 84 menit</div></div>
+                <div class="badge-tag tag-green" style="font-size:10px;">✅ Selesai</div>
+              </div>
+            </div>
+
+            <!-- Form Laporan -->
+            <div class="section-title">Catatan Harian</div>
+
+            <div class="input-label">Hambatan / Kendala Hari Ini</div>
+            <div style="border:1.5px solid var(--border-2);border-radius:10px;padding:12px;background:var(--bg-3);min-height:70px;margin-bottom:14px;font-size:14px;color:var(--text-muted);">
+              Tidak ada kendala signifikan. Traffic padat saat menuju klien pertama...
+            </div>
+
+            <div class="input-label">Rencana Esok Hari</div>
+            <div style="border:1.5px solid var(--border-2);border-radius:10px;padding:12px;background:var(--bg-3);min-height:70px;margin-bottom:14px;font-size:14px;color:var(--text-muted);">
+              Kunjungan PT Sukses Abadi pukul 09:00, follow-up via WA untuk Klinik Sehat...
+            </div>
+
+            <!-- Mood / Status -->
+            <div class="input-label">Status & Semangat Tim</div>
+            <div style="display:flex;gap:10px;margin-bottom:20px;">
+              <div style="flex:1;text-align:center;padding:10px;border-radius:10px;border:2px solid var(--primary);background:rgba(41,171,226,.08);cursor:pointer;">
+                <div style="font-size:24px;">😊</div>
+                <div class="text-xs text-primary text-bold">Baik</div>
+              </div>
+              <div style="flex:1;text-align:center;padding:10px;border-radius:10px;border:1.5px solid var(--border);cursor:pointer;">
+                <div style="font-size:24px;">😐</div>
+                <div class="text-xs text-muted">Sedang</div>
+              </div>
+              <div style="flex:1;text-align:center;padding:10px;border-radius:10px;border:1.5px solid var(--border);cursor:pointer;">
+                <div style="font-size:24px;">😓</div>
+                <div class="text-xs text-muted">Berat</div>
+              </div>
+            </div>
+
+            <div class="btn" style="margin-bottom:10px;">📤 Kirim Laporan ke Manajemen</div>
+            <div class="btn btn-outline">💾 Simpan Draft</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+  <!-- ══════════════════════════════════════════
+       FASE 2 — SCREEN 9: LOCATION TRACKING
+  ══════════════════════════════════════════ -->
+  <div class="screen-group" id="screen-location">
+    <div class="screens-row">
+
+      <!-- 9a: Peta Live Sales (sudut pandang sales) -->
+      <div class="phone-wrap">
+        <div class="phone-title">09 — Location Tracking (Sales View)</div>
+        <div class="phone">
+          <div class="status-bar"><div class="notch"></div><span>9:41</span><div class="status-icons"><span>●●●</span><span>WiFi</span><span>🔋</span></div></div>
+          <div class="app-bar">
+            <div><span class="title">Lacak Posisi</span><span class="subtitle">Berbagi lokasi aktif · Jam kerja</span></div>
+            <div class="action-btn">⚙️</div>
+          </div>
+
+          <div style="position:relative;">
+            <!-- Map area -->
+            <div style="background:linear-gradient(160deg,#0A1E14,#0D2B20,#0E3028);height:300px;position:relative;overflow:hidden;">
+              <!-- Grid lines simulasi peta -->
+              <svg width="100%" height="100%" style="position:absolute;top:0;left:0;opacity:.15">
+                <line x1="0" y1="60" x2="375" y2="60" stroke="#29ABE2" stroke-width="0.5"/>
+                <line x1="0" y1="120" x2="375" y2="120" stroke="#29ABE2" stroke-width="0.5"/>
+                <line x1="0" y1="180" x2="375" y2="180" stroke="#29ABE2" stroke-width="0.5"/>
+                <line x1="0" y1="240" x2="375" y2="240" stroke="#29ABE2" stroke-width="0.5"/>
+                <line x1="75" y1="0" x2="75" y2="300" stroke="#29ABE2" stroke-width="0.5"/>
+                <line x1="150" y1="0" x2="150" y2="300" stroke="#29ABE2" stroke-width="0.5"/>
+                <line x1="225" y1="0" x2="225" y2="300" stroke="#29ABE2" stroke-width="0.5"/>
+                <line x1="300" y1="0" x2="300" y2="300" stroke="#29ABE2" stroke-width="0.5"/>
+              </svg>
+              <!-- Jalan simulasi -->
+              <svg width="100%" height="100%" style="position:absolute;top:0;left:0;opacity:.3">
+                <line x1="60" y1="0" x2="200" y2="300" stroke="#4DC3F7" stroke-width="3"/>
+                <line x1="0" y1="110" x2="375" y2="130" stroke="#4DC3F7" stroke-width="3"/>
+                <line x1="0" y1="220" x2="375" y2="200" stroke="#4DC3F7" stroke-width="2"/>
+                <line x1="240" y1="0" x2="320" y2="300" stroke="#4DC3F7" stroke-width="2"/>
+              </svg>
+              <!-- Trail pergerakan -->
+              <svg width="100%" height="100%" style="position:absolute;top:0;left:0;">
+                <polyline points="60,280 80,240 100,210 130,180 150,150 160,120 175,100" stroke="#F7B731" stroke-width="2.5" fill="none" stroke-dasharray="5,3" opacity=".8"/>
+              </svg>
+              <!-- Posisi sekarang -->
+              <div style="position:absolute;left:168px;top:88px;transform:translate(-50%,-50%);">
+                <div style="width:18px;height:18px;border-radius:50%;background:#29ABE2;border:3px solid #fff;box-shadow:0 0 0 6px rgba(41,171,226,.3),0 0 16px rgba(41,171,226,.5);"></div>
+              </div>
+              <!-- Lokasi client A -->
+              <div style="position:absolute;left:80px;top:240px;transform:translate(-50%,-100%);">
+                <div style="background:#FF6B6B;color:#fff;font-size:11px;font-weight:700;padding:3px 8px;border-radius:6px;white-space:nowrap;">PT Maju Jaya ✅</div>
+                <div style="width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-top:8px solid #FF6B6B;margin:0 auto;"></div>
+              </div>
+              <!-- Lokasi client B -->
+              <div style="position:absolute;left:148px;top:155px;transform:translate(-50%,-100%);">
+                <div style="background:#F7B731;color:#111;font-size:11px;font-weight:700;padding:3px 8px;border-radius:6px;white-space:nowrap;">CV Berkah ✅</div>
+                <div style="width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-top:8px solid #F7B731;margin:0 auto;"></div>
+              </div>
+              <!-- Next destination -->
+              <div style="position:absolute;left:240px;top:60px;transform:translate(-50%,-100%);">
+                <div style="background:#29ABE2;color:#fff;font-size:11px;font-weight:700;padding:3px 8px;border-radius:6px;white-space:nowrap;">PT Sukses → Next</div>
+                <div style="width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-top:8px solid #29ABE2;margin:0 auto;"></div>
+              </div>
+              <!-- OpenStreetMap badge -->
+              <div style="position:absolute;bottom:6px;right:8px;background:rgba(0,0,0,.5);color:rgba(255,255,255,.6);font-size:9px;padding:2px 6px;border-radius:4px;">© OpenStreetMap</div>
+            </div>
+
+            <!-- Lokasi info strip -->
+            <div style="background:#0A1628;padding:10px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;">
+              <div style="width:8px;height:8px;border-radius:50%;background:#69D96D;box-shadow:0 0 6px #69D96D;flex-shrink:0;"></div>
+              <div class="flex1">
+                <div class="text-sm text-bold">Jl. Sudirman No. 42, Jakarta Pusat</div>
+                <div class="text-xs text-muted">GPS aktif · Akurasi 8m · 10:28 WIB</div>
+              </div>
+              <div class="badge-tag tag-green" style="font-size:10px;">Tracking ON</div>
+            </div>
+          </div>
+
+          <div class="scroll-body" style="max-height:320px;padding:14px;">
+            <!-- Stats hari ini -->
+            <div class="stats-grid stats-grid-3" style="margin-bottom:14px;">
+              <div class="stat-card" style="padding:10px;text-align:center;">
+                <div style="font-size:18px;font-weight:800;color:var(--primary);">2</div>
+                <div style="font-size:10px;color:var(--text-muted);">Kunjungan</div>
+              </div>
+              <div class="stat-card" style="padding:10px;text-align:center;">
+                <div style="font-size:18px;font-weight:800;color:var(--pkp-yellow);">14.2</div>
+                <div style="font-size:10px;color:var(--text-muted);">km Tempuh</div>
+              </div>
+              <div class="stat-card" style="padding:10px;text-align:center;">
+                <div style="font-size:18px;font-weight:800;color:var(--green);">2j 9m</div>
+                <div style="font-size:10px;color:var(--text-muted);">Total Waktu</div>
+              </div>
+            </div>
+
+            <!-- Kontrol tracking -->
+            <div class="section-title">Kontrol Tracking</div>
+            <div class="toggle-row card" style="padding:12px 14px;margin-bottom:10px;">
+              <div>
+                <div class="text-sm text-bold">Berbagi Lokasi Real-time</div>
+                <div class="text-xs text-muted">Manajer dapat melihat posisi Anda</div>
+              </div>
+              <div class="toggle on"></div>
+            </div>
+            <div style="background:rgba(247,183,49,.08);border:1px solid rgba(247,183,49,.2);border-radius:10px;padding:10px 12px;display:flex;gap:8px;align-items:flex-start;">
+              <span style="font-size:16px;">ℹ️</span>
+              <div class="text-xs text-muted">Tracking otomatis nonaktif di luar jam kerja (18:00–07:00) dan saat weekend untuk menjaga privasi.</div>
+            </div>
+          </div>
+
+          <div class="bottom-nav">
+            <div class="nav-item"><span class="nav-icon">🏠</span>Home</div>
+            <div class="nav-item"><span class="nav-icon">📋</span>Pipeline</div>
+            <div class="nav-item"><span class="nav-icon">📅</span>Jadwal</div>
+            <div class="nav-item active"><span class="nav-icon">📍</span>Check-in<div class="nav-dot"></div></div>
+            <div class="nav-item"><span class="nav-icon">👤</span>Profil</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 9b: Manager View — semua tim di peta -->
+      <div class="phone-wrap">
+        <div class="phone-title">09b — Location Tracking (Manager View)</div>
+        <div class="phone">
+          <div class="status-bar"><div class="notch"></div><span>9:41</span><div class="status-icons"><span>●●●</span><span>WiFi</span><span>🔋</span></div></div>
+          <div class="app-bar">
+            <span>←</span>
+            <div style="flex:1;padding-left:8px;"><span class="title">Pantau Tim</span><span class="subtitle">5 sales aktif dari 8 total</span></div>
+          </div>
+
+          <!-- Map -->
+          <div style="background:linear-gradient(160deg,#0A1E14,#0D2B20,#0E3028);height:280px;position:relative;overflow:hidden;">
+            <svg width="100%" height="100%" style="position:absolute;top:0;left:0;opacity:.15">
+              <line x1="0" y1="56" x2="375" y2="56" stroke="#29ABE2" stroke-width="0.5"/>
+              <line x1="0" y1="112" x2="375" y2="112" stroke="#29ABE2" stroke-width="0.5"/>
+              <line x1="0" y1="168" x2="375" y2="168" stroke="#29ABE2" stroke-width="0.5"/>
+              <line x1="0" y1="224" x2="375" y2="224" stroke="#29ABE2" stroke-width="0.5"/>
+              <line x1="75" y1="0" x2="75" y2="280" stroke="#29ABE2" stroke-width="0.5"/>
+              <line x1="150" y1="0" x2="150" y2="280" stroke="#29ABE2" stroke-width="0.5"/>
+              <line x1="225" y1="0" x2="225" y2="280" stroke="#29ABE2" stroke-width="0.5"/>
+              <line x1="300" y1="0" x2="300" y2="280" stroke="#29ABE2" stroke-width="0.5"/>
+            </svg>
+            <svg width="100%" height="100%" style="position:absolute;opacity:.25">
+              <line x1="50" y1="0" x2="180" y2="280" stroke="#4DC3F7" stroke-width="3"/>
+              <line x1="0" y1="100" x2="375" y2="120" stroke="#4DC3F7" stroke-width="3"/>
+              <line x1="0" y1="200" x2="375" y2="185" stroke="#4DC3F7" stroke-width="2"/>
+              <line x1="250" y1="0" x2="310" y2="280" stroke="#4DC3F7" stroke-width="2"/>
+            </svg>
+            <!-- Sales dots -->
+            <div style="position:absolute;left:80px;top:90px;">
+              <div style="width:32px;height:32px;border-radius:50%;background:#29ABE2;border:2px solid #fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;box-shadow:0 0 10px rgba(41,171,226,.5);">H</div>
+              <div style="font-size:9px;color:#4DC3F7;text-align:center;margin-top:2px;white-space:nowrap;">Hariman</div>
+            </div>
+            <div style="position:absolute;left:190px;top:60px;">
+              <div style="width:32px;height:32px;border-radius:50%;background:#69D96D;border:2px solid #fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;box-shadow:0 0 10px rgba(105,217,109,.5);">R</div>
+              <div style="font-size:9px;color:#69D96D;text-align:center;margin-top:2px;white-space:nowrap;">Rudi</div>
+            </div>
+            <div style="position:absolute;left:270px;top:140px;">
+              <div style="width:32px;height:32px;border-radius:50%;background:#F7B731;border:2px solid #fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#111;box-shadow:0 0 10px rgba(247,183,49,.5);">S</div>
+              <div style="font-size:9px;color:#F7B731;text-align:center;margin-top:2px;white-space:nowrap;">Sari</div>
+            </div>
+            <div style="position:absolute;left:130px;top:190px;">
+              <div style="width:32px;height:32px;border-radius:50%;background:#FF6B6B;border:2px solid #fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;box-shadow:0 0 10px rgba(255,107,107,.5);">D</div>
+              <div style="font-size:9px;color:#FF6B6B;text-align:center;margin-top:2px;white-space:nowrap;">Dian</div>
+            </div>
+            <div style="position:absolute;left:320px;top:220px;">
+              <div style="width:32px;height:32px;border-radius:50%;background:#B89AF0;border:2px solid #fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;box-shadow:0 0 10px rgba(184,154,240,.5);">A</div>
+              <div style="font-size:9px;color:#B89AF0;text-align:center;margin-top:2px;white-space:nowrap;">Andi</div>
+            </div>
+            <div style="position:absolute;bottom:6px;right:8px;background:rgba(0,0,0,.5);color:rgba(255,255,255,.6);font-size:9px;padding:2px 6px;border-radius:4px;">© OpenStreetMap</div>
+          </div>
+
+          <!-- Tim list -->
+          <div class="scroll-body" style="max-height:380px;">
+            <div style="padding:10px 14px;background:var(--bg-3);border-bottom:1px solid var(--border);">
+              <div class="text-xs text-muted text-bold">STATUS TIM — 10 Juni 2026</div>
+            </div>
+            <div class="list-item">
+              <div class="row between">
+                <div class="row" style="gap:8px;">
+                  <div style="width:8px;height:8px;border-radius:50%;background:#69D96D;flex-shrink:0;margin-top:4px;"></div>
+                  <div><div class="text-sm text-bold">Hariman</div><div class="text-xs text-muted">Jl. Sudirman · Check-in CV Berkah</div></div>
+                </div>
+                <div class="col" style="align-items:flex-end;gap:3px;">
+                  <div class="badge-tag tag-green" style="font-size:10px;">Aktif</div>
+                  <div class="text-xs text-muted">2 kunjungan</div>
+                </div>
+              </div>
+            </div>
+            <div class="list-item">
+              <div class="row between">
+                <div class="row" style="gap:8px;">
+                  <div style="width:8px;height:8px;border-radius:50%;background:#69D96D;flex-shrink:0;margin-top:4px;"></div>
+                  <div><div class="text-sm text-bold">Rudi Santoso</div><div class="text-xs text-muted">Jl. Thamrin · Dalam perjalanan</div></div>
+                </div>
+                <div class="col" style="align-items:flex-end;gap:3px;">
+                  <div class="badge-tag tag-green" style="font-size:10px;">Aktif</div>
+                  <div class="text-xs text-muted">1 kunjungan</div>
+                </div>
+              </div>
+            </div>
+            <div class="list-item">
+              <div class="row between">
+                <div class="row" style="gap:8px;">
+                  <div style="width:8px;height:8px;border-radius:50%;background:#F7B731;flex-shrink:0;margin-top:4px;"></div>
+                  <div><div class="text-sm text-bold">Sari Dewi</div><div class="text-xs text-muted">Jl. Gatot Subroto · Check-in aktif</div></div>
+                </div>
+                <div class="col" style="align-items:flex-end;gap:3px;">
+                  <div class="badge-tag tag-orange" style="font-size:10px;">Check-in</div>
+                  <div class="text-xs text-muted">3 kunjungan</div>
+                </div>
+              </div>
+            </div>
+            <div class="list-item">
+              <div class="row between">
+                <div class="row" style="gap:8px;">
+                  <div style="width:8px;height:8px;border-radius:50%;background:var(--text-light);flex-shrink:0;margin-top:4px;"></div>
+                  <div><div class="text-sm text-bold">Budi Prasetyo</div><div class="text-xs text-muted">Tracking nonaktif</div></div>
+                </div>
+                <div class="badge-tag tag-gray" style="font-size:10px;">Offline</div>
+              </div>
+            </div>
+            <div class="list-item">
+              <div class="row between">
+                <div class="row" style="gap:8px;">
+                  <div style="width:8px;height:8px;border-radius:50%;background:var(--text-light);flex-shrink:0;margin-top:4px;"></div>
+                  <div><div class="text-sm text-bold">Citra Lestari</div><div class="text-xs text-muted">Tracking nonaktif</div></div>
+                </div>
+                <div class="badge-tag tag-gray" style="font-size:10px;">Offline</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════
+       FASE 2 — SCREEN 10: NOTIFIKASI
+  ══════════════════════════════════════════ -->
+  <div class="screen-group" id="screen-notifikasi">
+    <div class="screens-row">
+
+      <div class="phone-wrap">
+        <div class="phone-title">10 — Notification Center</div>
+        <div class="phone">
+          <div class="status-bar"><div class="notch"></div><span>9:41</span><div class="status-icons"><span>●●●</span><span>WiFi</span><span>🔋</span></div></div>
+          <div class="app-bar">
+            <div><span class="title">Notifikasi</span><span class="subtitle">5 belum dibaca</span></div>
+            <div class="action-btn" style="font-size:13px;">Tandai Semua</div>
+          </div>
+
+          <!-- Filter chips -->
+          <div style="padding:10px 14px;background:var(--bg-2);border-bottom:1px solid var(--border);">
+            <div class="chips" style="margin-bottom:0;">
+              <div class="chip active">Semua</div>
+              <div class="chip">Follow-Up</div>
+              <div class="chip">Pipeline</div>
+              <div class="chip">Approval</div>
+            </div>
+          </div>
+
+          <div class="scroll-body" style="max-height:590px;">
+
+            <!-- Notif 1 — overdue FU (unread) -->
+            <div class="list-item" style="border-left:3px solid var(--red);background:rgba(244,67,54,.05);">
+              <div class="row" style="gap:10px;margin-bottom:5px;">
+                <div style="width:38px;height:38px;border-radius:50%;background:rgba(244,67,54,.15);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;">⚠️</div>
+                <div class="flex1">
+                  <div class="row between">
+                    <div class="text-sm text-bold" style="color:var(--red);">Follow-Up Overdue!</div>
+                    <div class="text-xs text-muted">09:00</div>
+                  </div>
+                  <div class="text-xs" style="color:var(--text);margin-top:2px;">PT Sukses Abadi belum di-follow-up sejak <span style="color:var(--red);font-weight:700;">2 hari lalu</span>. Segera tindak lanjuti.</div>
+                </div>
+              </div>
+              <div style="margin-left:48px;"><div class="badge-tag tag-red" style="font-size:10px;">Negotiation · Rp 450 jt</div></div>
+            </div>
+
+            <!-- Notif 2 — reminder FU hari ini (unread) -->
+            <div class="list-item" style="border-left:3px solid var(--pkp-yellow);background:rgba(247,183,49,.04);">
+              <div class="row" style="gap:10px;margin-bottom:5px;">
+                <div style="width:38px;height:38px;border-radius:50%;background:rgba(247,183,49,.15);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;">📅</div>
+                <div class="flex1">
+                  <div class="row between">
+                    <div class="text-sm text-bold" style="color:var(--pkp-yellow);">Reminder Follow-Up</div>
+                    <div class="text-xs text-muted">08:30</div>
+                  </div>
+                  <div class="text-xs" style="color:var(--text);margin-top:2px;">CV Berkah Makmur — jadwal FU hari ini pukul <span style="font-weight:700;">10:00 WIB</span>. Demo produk CCTV.</div>
+                </div>
+              </div>
+              <div style="margin-left:48px;"><div class="badge-tag tag-orange" style="font-size:10px;">Proposal Sent · Rp 85 jt</div></div>
+            </div>
+
+            <!-- Notif 3 — stale lead (unread) -->
+            <div class="list-item" style="border-left:3px solid var(--orange);background:rgba(255,140,66,.04);">
+              <div class="row" style="gap:10px;margin-bottom:5px;">
+                <div style="width:38px;height:38px;border-radius:50%;background:rgba(255,140,66,.15);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;">🕐</div>
+                <div class="flex1">
+                  <div class="row between">
+                    <div class="text-sm text-bold" style="color:var(--orange);">Lead Stale — 35 Hari</div>
+                    <div class="text-xs text-muted">Kemarin</div>
+                  </div>
+                  <div class="text-xs" style="color:var(--text);margin-top:2px;">Klinik Sehat Bersama tidak ada aktivitas selama <span style="font-weight:700;">35 hari</span>. Perlu tindakan segera.</div>
+                </div>
+              </div>
+              <div style="margin-left:48px;"><div class="badge-tag tag-orange" style="font-size:10px;">In Progress · Rp 180 jt</div></div>
+            </div>
+
+            <!-- Notif 4 — approval manager (unread) -->
+            <div class="list-item" style="border-left:3px solid var(--primary);background:rgba(41,171,226,.04);">
+              <div class="row" style="gap:10px;margin-bottom:5px;">
+                <div style="width:38px;height:38px;border-radius:50%;background:rgba(41,171,226,.15);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;">💬</div>
+                <div class="flex1">
+                  <div class="row between">
+                    <div class="text-sm text-bold">Komentar Manager</div>
+                    <div class="text-xs text-muted">Kemarin</div>
+                  </div>
+                  <div class="text-xs" style="color:var(--text);margin-top:2px;">Manajer Budi: <span style="font-style:italic;">"Pastikan proposal revised sudah dikirim ke PT Sukses sebelum Jumat."</span></div>
+                </div>
+              </div>
+              <div style="margin-left:48px;"><div class="badge-tag tag-blue" style="font-size:10px;">PT Sukses Abadi</div></div>
+            </div>
+
+            <!-- Notif 5 — closing mendekat (unread) -->
+            <div class="list-item" style="border-left:3px solid var(--purple);background:rgba(156,111,228,.04);">
+              <div class="row" style="gap:10px;margin-bottom:5px;">
+                <div style="width:38px;height:38px;border-radius:50%;background:rgba(156,111,228,.15);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;">🏁</div>
+                <div class="flex1">
+                  <div class="row between">
+                    <div class="text-sm text-bold" style="color:var(--purple);">Deadline Closing 5 Hari Lagi</div>
+                    <div class="text-xs text-muted">2 hari lalu</div>
+                  </div>
+                  <div class="text-xs" style="color:var(--text);margin-top:2px;">PT Sukses Abadi — estimated closing <span style="font-weight:700;">30 Juni 2026</span>. Nilai: Rp 450 jt.</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Divider sudah dibaca -->
+            <div style="padding:8px 14px;background:var(--bg-3);border-top:1px solid var(--border);border-bottom:1px solid var(--border);">
+              <div class="text-xs text-muted">Sudah dibaca</div>
+            </div>
+
+            <!-- Notif lama (read) -->
+            <div class="list-item" style="opacity:.55;">
+              <div class="row" style="gap:10px;">
+                <div style="width:38px;height:38px;border-radius:50%;background:var(--bg-4);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;">✅</div>
+                <div class="flex1">
+                  <div class="row between">
+                    <div class="text-sm text-bold">Follow-Up Selesai Dicatat</div>
+                    <div class="text-xs text-muted">8 Jun</div>
+                  </div>
+                  <div class="text-xs text-muted">CV Berkah Makmur — hasil meeting dicatat, next FU dijadwalkan.</div>
+                </div>
+              </div>
+            </div>
+            <div class="list-item" style="opacity:.55;">
+              <div class="row" style="gap:10px;">
+                <div style="width:38px;height:38px;border-radius:50%;background:var(--bg-4);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;">📥</div>
+                <div class="flex1">
+                  <div class="row between">
+                    <div class="text-sm text-bold">Leads Baru Ditugaskan</div>
+                    <div class="text-xs text-muted">7 Jun</div>
+                  </div>
+                  <div class="text-xs text-muted">RM Padang Selera ditugaskan ke Anda oleh Manajer Budi.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Push notification preview -->
+      <div class="phone-wrap">
+        <div class="phone-title">10b — Push Notification (Lock Screen)</div>
+        <div class="phone">
+          <div style="background:linear-gradient(175deg,#020810,#04101E,#071828);min-height:700px;padding:0;position:relative;overflow:hidden;">
+            <!-- Lock screen bg -->
+            <div style="background:linear-gradient(175deg,#020810,#071828);padding:40px 20px 20px;text-align:center;border-bottom:1px solid rgba(255,255,255,.05);">
+              <div style="font-size:48px;font-weight:200;color:#E2E8F0;letter-spacing:2px;">10:28</div>
+              <div style="font-size:14px;color:rgba(255,255,255,.5);margin-top:4px;">Rabu, 10 Juni 2026</div>
+            </div>
+
+            <div style="padding:14px;">
+              <div class="text-xs text-muted text-bold" style="margin-bottom:10px;letter-spacing:.5px;">NOTIFIKASI</div>
+
+              <!-- Push notif 1 -->
+              <div style="background:rgba(255,255,255,.08);backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,.1);border-radius:14px;padding:14px;margin-bottom:10px;">
+                <div class="row" style="gap:10px;margin-bottom:6px;">
+                  <div style="width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,#0E87BF,#29ABE2);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;">🏆</div>
+                  <div class="flex1">
+                    <div class="row between">
+                      <div style="font-size:12px;font-weight:700;color:rgba(255,255,255,.9);">APEX</div>
+                      <div style="font-size:11px;color:rgba(255,255,255,.4);">baru saja</div>
+                    </div>
+                    <div style="font-size:12px;font-weight:700;color:#FF6B6B;margin-top:2px;">⚠️ Follow-Up Overdue!</div>
+                  </div>
+                </div>
+                <div style="font-size:12px;color:rgba(255,255,255,.7);">PT Sukses Abadi belum di-follow-up sejak 2 hari lalu. Segera tindak lanjuti sebelum deal hilang.</div>
+              </div>
+
+              <!-- Push notif 2 -->
+              <div style="background:rgba(255,255,255,.06);backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:14px;margin-bottom:10px;">
+                <div class="row" style="gap:10px;margin-bottom:6px;">
+                  <div style="width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,#0E87BF,#29ABE2);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;">🏆</div>
+                  <div class="flex1">
+                    <div class="row between">
+                      <div style="font-size:12px;font-weight:700;color:rgba(255,255,255,.9);">APEX</div>
+                      <div style="font-size:11px;color:rgba(255,255,255,.4);">08:30</div>
+                    </div>
+                    <div style="font-size:12px;font-weight:700;color:#F7B731;margin-top:2px;">📅 Reminder: FU Hari Ini 10:00</div>
+                  </div>
+                </div>
+                <div style="font-size:12px;color:rgba(255,255,255,.6);">CV Berkah Makmur — Demo CCTV. Siapkan materi presentasi.</div>
+              </div>
+
+              <!-- Push notif 3 -->
+              <div style="background:rgba(255,255,255,.05);backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,.07);border-radius:14px;padding:14px;">
+                <div class="row" style="gap:10px;margin-bottom:6px;">
+                  <div style="width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,#0E87BF,#29ABE2);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;">🏆</div>
+                  <div class="flex1">
+                    <div class="row between">
+                      <div style="font-size:12px;font-weight:700;color:rgba(255,255,255,.9);">APEX</div>
+                      <div style="font-size:11px;color:rgba(255,255,255,.4);">07:45</div>
+                    </div>
+                    <div style="font-size:12px;font-weight:700;color:rgba(255,255,255,.8);margin-top:2px;">💬 Komentar Manager</div>
+                  </div>
+                </div>
+                <div style="font-size:12px;color:rgba(255,255,255,.55);">"Pastikan proposal sudah dikirim ke PT Sukses sebelum Jumat."</div>
+              </div>
+            </div>
+
+            <!-- Swipe hint -->
+            <div style="position:absolute;bottom:30px;left:50%;transform:translateX(-50%);text-align:center;">
+              <div style="width:120px;height:4px;border-radius:2px;background:rgba(255,255,255,.3);margin:0 auto 10px;"></div>
+              <div style="font-size:11px;color:rgba(255,255,255,.3);">Geser ke atas untuk membuka</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════
+       FASE 2 — SCREEN 11: REPORT KE MANAGER
+  ══════════════════════════════════════════ -->
+  <div class="screen-group" id="screen-report-manager">
+    <div class="screens-row">
+
+      <div class="phone-wrap">
+        <div class="phone-title">11 — Kirim Report ke Manager</div>
+        <div class="phone">
+          <div class="status-bar"><div class="notch"></div><span>9:41</span><div class="status-icons"><span>●●●</span><span>WiFi</span><span>🔋</span></div></div>
+          <div class="app-bar">
+            <span>←</span>
+            <div style="flex:1;padding-left:8px;"><span class="title">Kirim Laporan Harian</span></div>
+            <div class="btn btn-sm" style="background:var(--primary);color:#fff;border:none;padding:7px 14px;">Kirim</div>
+          </div>
+
+          <div class="scroll-body" style="max-height:640px;padding:16px;">
+
+            <!-- Preview Summary -->
+            <div style="background:linear-gradient(135deg,#020810,#071828);border:1px solid rgba(41,171,226,.2);border-radius:14px;padding:16px;margin-bottom:16px;">
+              <div class="row" style="gap:10px;margin-bottom:12px;">
+                <img src="pkp-logo-dark.png" alt="PKP" style="height:20px;"/>
+                <div>
+                  <div style="font-size:12px;font-weight:800;color:#F7B731;letter-spacing:2px;">APEX</div>
+                  <div style="font-size:10px;color:rgba(255,255,255,.5);">Daily Sales Report</div>
+                </div>
+              </div>
+              <div style="font-size:13px;font-weight:700;color:#E2E8F0;margin-bottom:2px;">Hariman — Rabu, 10 Juni 2026</div>
+              <div style="font-size:11px;color:rgba(255,255,255,.45);margin-bottom:12px;">Dikirim ke: Manajer Budi Santoso</div>
+              <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
+                <div style="background:rgba(255,255,255,.07);border-radius:8px;padding:8px;text-align:center;">
+                  <div style="font-size:18px;font-weight:800;color:#29ABE2;">2</div>
+                  <div style="font-size:9px;color:rgba(255,255,255,.5);">Kunjungan</div>
+                </div>
+                <div style="background:rgba(255,255,255,.07);border-radius:8px;padding:8px;text-align:center;">
+                  <div style="font-size:18px;font-weight:800;color:#F7B731;">4</div>
+                  <div style="font-size:9px;color:rgba(255,255,255,.5);">Follow-Up</div>
+                </div>
+                <div style="background:rgba(255,255,255,.07);border-radius:8px;padding:8px;text-align:center;">
+                  <div style="font-size:18px;font-weight:800;color:#69D96D;">1</div>
+                  <div style="font-size:9px;color:rgba(255,255,255,.5);">Leads Baru</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Kirim ke -->
+            <div class="section-title">Kirim Kepada</div>
+            <div class="card" style="margin-bottom:14px;">
+              <div class="row" style="gap:10px;">
+                <div class="avatar avatar-sm" style="background:rgba(41,171,226,.15);color:var(--primary);">BS</div>
+                <div class="flex1">
+                  <div class="text-sm text-bold">Budi Santoso</div>
+                  <div class="text-xs text-muted">Manajer Penjualan · Atasan langsung</div>
+                </div>
+                <div style="width:20px;height:20px;border-radius:50%;background:var(--primary);display:flex;align-items:center;justify-content:center;font-size:11px;color:#fff;">✓</div>
+              </div>
+              <div class="divider"></div>
+              <div class="row" style="gap:10px;opacity:.5;">
+                <div class="avatar avatar-sm">DL</div>
+                <div class="flex1">
+                  <div class="text-sm text-bold">Direktur Lini</div>
+                  <div class="text-xs text-muted">CC — Opsional</div>
+                </div>
+                <div style="width:20px;height:20px;border-radius:4px;border:1.5px solid var(--border-2);"></div>
+              </div>
+            </div>
+
+            <!-- Catatan tambahan -->
+            <div class="section-title">Catatan Tambahan</div>
+            <div style="border:1.5px solid var(--border-2);border-radius:10px;padding:12px;background:var(--bg-3);min-height:80px;margin-bottom:14px;font-size:14px;color:var(--text-muted);">
+              Kunjungan berjalan baik. Pipeline Negotiation perlu perhatian lebih...
+            </div>
+
+            <!-- Lampiran -->
+            <div class="section-title">Lampiran Otomatis</div>
+            <div class="card" style="margin-bottom:14px;">
+              <div class="row" style="gap:8px;margin-bottom:8px;">
+                <span>📎</span>
+                <div class="text-sm">Rekap check-in & check-out GPS</div>
+                <div class="badge-tag tag-green" style="font-size:10px;margin-left:auto;">Otomatis</div>
+              </div>
+              <div class="row" style="gap:8px;margin-bottom:8px;">
+                <span>📎</span>
+                <div class="text-sm">Riwayat 4 follow-up hari ini</div>
+                <div class="badge-tag tag-green" style="font-size:10px;margin-left:auto;">Otomatis</div>
+              </div>
+              <div class="row" style="gap:8px;">
+                <span>📎</span>
+                <div class="text-sm">Foto bukti kunjungan (2 file)</div>
+                <div class="badge-tag tag-blue" style="font-size:10px;margin-left:auto;">Manual</div>
+              </div>
+            </div>
+
+            <div class="btn" style="margin-bottom:10px;display:flex;align-items:center;justify-content:center;gap:8px;">
+              <span>📤</span> Kirim Sekarang
+            </div>
+            <div class="btn btn-outline">💾 Simpan Draft</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Report history / received (manager side) -->
+      <div class="phone-wrap">
+        <div class="phone-title">11b — Histori Laporan</div>
+        <div class="phone">
+          <div class="status-bar"><div class="notch"></div><span>9:41</span><div class="status-icons"><span>●●●</span><span>WiFi</span><span>🔋</span></div></div>
+          <div class="app-bar">
+            <div><span class="title">Histori Laporan</span><span class="subtitle">30 hari terakhir</span></div>
+          </div>
+
+          <div class="scroll-body" style="max-height:640px;">
+            <div style="padding:6px 14px;background:var(--bg-3);border-bottom:1px solid var(--border);">
+              <div class="text-xs text-muted">Juni 2026</div>
+            </div>
+
+            <div class="list-item">
+              <div class="row between" style="margin-bottom:4px;">
+                <div class="text-sm text-bold">Rabu, 10 Juni 2026</div>
+                <div class="badge-tag tag-green" style="font-size:10px;">✅ Terkirim</div>
+              </div>
+              <div class="row" style="gap:12px;">
+                <div class="text-xs text-muted">👥 2 kunjungan</div>
+                <div class="text-xs text-muted">📝 4 FU</div>
+                <div class="text-xs text-muted">➕ 1 leads baru</div>
+              </div>
+              <div class="text-xs text-muted" style="margin-top:3px;">Terkirim ke Budi Santoso · 17:30</div>
+            </div>
+
+            <div class="list-item">
+              <div class="row between" style="margin-bottom:4px;">
+                <div class="text-sm text-bold">Selasa, 9 Juni 2026</div>
+                <div class="badge-tag tag-green" style="font-size:10px;">✅ Terkirim</div>
+              </div>
+              <div class="row" style="gap:12px;">
+                <div class="text-xs text-muted">👥 3 kunjungan</div>
+                <div class="text-xs text-muted">📝 6 FU</div>
+                <div class="text-xs text-muted">🏆 1 closed</div>
+              </div>
+              <div class="text-xs text-muted" style="margin-top:3px;">Terkirim ke Budi Santoso · 18:15</div>
+            </div>
+
+            <div class="list-item">
+              <div class="row between" style="margin-bottom:4px;">
+                <div class="text-sm text-bold">Senin, 8 Juni 2026</div>
+                <div class="badge-tag tag-orange" style="font-size:10px;">⏰ Terlambat</div>
+              </div>
+              <div class="row" style="gap:12px;">
+                <div class="text-xs text-muted">👥 1 kunjungan</div>
+                <div class="text-xs text-muted">📝 3 FU</div>
+              </div>
+              <div class="text-xs text-muted" style="margin-top:3px;">Terkirim · 21:05 (batas 19:00)</div>
+            </div>
+
+            <div class="list-item">
+              <div class="row between" style="margin-bottom:4px;">
+                <div class="text-sm text-bold">Sabtu, 7 Juni 2026</div>
+                <div class="badge-tag tag-gray" style="font-size:10px;">— Libur</div>
+              </div>
+              <div class="text-xs text-muted">Tidak ada laporan (hari libur)</div>
+            </div>
+
+            <div class="list-item">
+              <div class="row between" style="margin-bottom:4px;">
+                <div class="text-sm text-bold">Jumat, 6 Juni 2026</div>
+                <div class="badge-tag tag-red" style="font-size:10px;">❌ Tidak Terkirim</div>
+              </div>
+              <div class="row" style="gap:12px;">
+                <div class="text-xs text-muted">Data check-in tersimpan</div>
+              </div>
+              <div class="text-xs" style="margin-top:3px;color:var(--red);">Laporan tidak dikirim</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════
+       FASE 3 — SCREEN 12: OCR SCAN KARTU NAMA
+  ══════════════════════════════════════════ -->
+  <div class="screen-group" id="screen-ocr">
+    <div class="screens-row">
+
+      <div class="phone-wrap">
+        <div class="phone-title">12 — OCR Scan Kartu Nama</div>
+        <div class="phone">
+          <div class="status-bar"><div class="notch"></div><span>9:41</span><div class="status-icons"><span>●●●</span><span>WiFi</span><span>🔋</span></div></div>
+          <div class="app-bar">
+            <span>✕</span>
+            <div style="flex:1;padding-left:8px;"><span class="title">Scan Kartu Nama</span></div>
+          </div>
+
+          <!-- Camera viewfinder -->
+          <div style="background:#000;height:260px;position:relative;display:flex;align-items:center;justify-content:center;overflow:hidden;">
+            <div style="background:linear-gradient(135deg,#0A1E14,#050A0D);width:100%;height:100%;position:absolute;opacity:.9;"></div>
+            <!-- Kartu nama placeholder -->
+            <div style="position:relative;z-index:2;width:290px;height:170px;border-radius:8px;background:linear-gradient(135deg,#1a2535,#243447);border:2px dashed rgba(41,171,226,.6);display:flex;align-items:center;justify-content:center;overflow:hidden;">
+              <!-- Simulasi kartu nama -->
+              <div style="padding:16px;width:100%;">
+                <div style="font-size:14px;font-weight:800;color:#E2E8F0;margin-bottom:4px;">Ahmad Budi Santoso</div>
+                <div style="font-size:11px;color:#29ABE2;margin-bottom:8px;">General Manager · PT Abadi Sejahtera</div>
+                <div style="font-size:10px;color:rgba(255,255,255,.5);margin-bottom:2px;">📞 +62 812 3456 7890</div>
+                <div style="font-size:10px;color:rgba(255,255,255,.5);margin-bottom:2px;">✉️ ahmad@abadisejahtera.co.id</div>
+                <div style="font-size:10px;color:rgba(255,255,255,.5);">🏢 Jl. Sudirman No. 88, Jakarta</div>
+              </div>
+              <!-- OCR scanning line -->
+              <div style="position:absolute;top:40%;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,#29ABE2,transparent);animation:none;"></div>
+            </div>
+            <!-- Corner guides -->
+            <div style="position:absolute;top:40px;left:40px;width:20px;height:20px;border-top:3px solid #29ABE2;border-left:3px solid #29ABE2;z-index:3;border-radius:2px 0 0 0;"></div>
+            <div style="position:absolute;top:40px;right:40px;width:20px;height:20px;border-top:3px solid #29ABE2;border-right:3px solid #29ABE2;z-index:3;border-radius:0 2px 0 0;"></div>
+            <div style="position:absolute;bottom:40px;left:40px;width:20px;height:20px;border-bottom:3px solid #29ABE2;border-left:3px solid #29ABE2;z-index:3;border-radius:0 0 0 2px;"></div>
+            <div style="position:absolute;bottom:40px;right:40px;width:20px;height:20px;border-bottom:3px solid #29ABE2;border-right:3px solid #29ABE2;z-index:3;border-radius:0 0 2px 0;"></div>
+            <!-- Processing bar -->
+            <div style="position:absolute;bottom:12px;left:50%;transform:translateX(-50%);background:rgba(41,171,226,.2);border:1px solid rgba(41,171,226,.4);border-radius:20px;padding:5px 14px;z-index:4;">
+              <div class="text-xs" style="color:#29ABE2;font-weight:700;">🔍 Memproses OCR...</div>
+            </div>
+          </div>
+
+          <!-- OCR Result -->
+          <div style="padding:16px;">
+            <div style="background:rgba(76,175,80,.08);border:1px solid rgba(76,175,80,.25);border-radius:10px;padding:10px 14px;margin-bottom:14px;display:flex;align-items:center;gap:8px;">
+              <span style="font-size:18px;">✅</span>
+              <div>
+                <div class="text-sm text-bold" style="color:var(--green);">Kartu nama berhasil dibaca</div>
+                <div class="text-xs text-muted">5 field terdeteksi · Akurasi 96%</div>
+              </div>
+            </div>
+
+            <div class="section-title">Hasil Ekstraksi — Cek & Edit</div>
+
+            <div class="input-label">Nama</div>
+            <div class="input-field focused">Ahmad Budi Santoso</div>
+
+            <div class="input-label">Jabatan</div>
+            <div class="input-field">General Manager</div>
+
+            <div class="input-label">Perusahaan</div>
+            <div class="input-field">PT Abadi Sejahtera</div>
+
+            <div class="input-label">Nomor Telepon</div>
+            <div class="input-field">+62 812 3456 7890</div>
+
+            <div class="input-label">Email</div>
+            <div class="input-field">ahmad@abadisejahtera.co.id</div>
+
+            <div class="row" style="gap:10px;margin-top:4px;">
+              <div class="btn btn-success" style="display:flex;align-items:center;justify-content:center;gap:6px;">✅ Simpan Kontak</div>
+              <div class="btn btn-outline" style="display:flex;align-items:center;justify-content:center;gap:6px;">📋 + Buat Lead</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════
+       FASE 3 — SCREEN 13: VOICE NOTE
+  ══════════════════════════════════════════ -->
+  <div class="screen-group" id="screen-voice">
+    <div class="screens-row">
+
+      <div class="phone-wrap">
+        <div class="phone-title">13 — Voice Note Recorder</div>
+        <div class="phone">
+          <div class="status-bar"><div class="notch"></div><span>9:41</span><div class="status-icons"><span>●●●</span><span>WiFi</span><span>🔋</span></div></div>
+          <div class="app-bar">
+            <span>✕</span>
+            <div style="flex:1;padding-left:8px;"><span class="title">Voice Note</span><span class="subtitle">CV Berkah Makmur</span></div>
+          </div>
+
+          <div style="padding:20px 20px 16px;display:flex;flex-direction:column;align-items:center;gap:0;">
+
+            <!-- Recording state -->
+            <div style="text-align:center;margin-bottom:24px;">
+              <div style="font-size:13px;color:var(--red);font-weight:700;letter-spacing:1px;margin-bottom:4px;">● MEREKAM</div>
+              <div style="font-size:42px;font-weight:200;color:#E2E8F0;letter-spacing:2px;">01:24</div>
+            </div>
+
+            <!-- Waveform visualization -->
+            <div style="width:100%;height:60px;display:flex;align-items:center;justify-content:center;gap:2px;margin-bottom:24px;">
+              <div style="width:3px;height:8px;border-radius:2px;background:rgba(41,171,226,.3);"></div>
+              <div style="width:3px;height:18px;border-radius:2px;background:rgba(41,171,226,.4);"></div>
+              <div style="width:3px;height:32px;border-radius:2px;background:rgba(41,171,226,.5);"></div>
+              <div style="width:3px;height:14px;border-radius:2px;background:rgba(41,171,226,.4);"></div>
+              <div style="width:3px;height:42px;border-radius:2px;background:#29ABE2;"></div>
+              <div style="width:3px;height:24px;border-radius:2px;background:#29ABE2;"></div>
+              <div style="width:3px;height:50px;border-radius:2px;background:#29ABE2;"></div>
+              <div style="width:3px;height:38px;border-radius:2px;background:#29ABE2;"></div>
+              <div style="width:3px;height:28px;border-radius:2px;background:rgba(41,171,226,.7);"></div>
+              <div style="width:3px;height:46px;border-radius:2px;background:#29ABE2;"></div>
+              <div style="width:3px;height:20px;border-radius:2px;background:rgba(41,171,226,.6);"></div>
+              <div style="width:3px;height:34px;border-radius:2px;background:#29ABE2;"></div>
+              <div style="width:3px;height:16px;border-radius:2px;background:rgba(41,171,226,.5);"></div>
+              <div style="width:3px;height:44px;border-radius:2px;background:#29ABE2;"></div>
+              <div style="width:3px;height:10px;border-radius:2px;background:rgba(41,171,226,.4);"></div>
+              <!-- Current position (blinking) -->
+              <div style="width:3px;height:52px;border-radius:2px;background:#FF6B6B;box-shadow:0 0 6px #FF6B6B;"></div>
+              <!-- Future (dimmed) -->
+              <div style="width:3px;height:12px;border-radius:2px;background:rgba(255,255,255,.1);"></div>
+              <div style="width:3px;height:12px;border-radius:2px;background:rgba(255,255,255,.1);"></div>
+              <div style="width:3px;height:12px;border-radius:2px;background:rgba(255,255,255,.1);"></div>
+              <div style="width:3px;height:12px;border-radius:2px;background:rgba(255,255,255,.1);"></div>
+              <div style="width:3px;height:12px;border-radius:2px;background:rgba(255,255,255,.1);"></div>
+              <div style="width:3px;height:12px;border-radius:2px;background:rgba(255,255,255,.1);"></div>
+              <div style="width:3px;height:12px;border-radius:2px;background:rgba(255,255,255,.1);"></div>
+            </div>
+
+            <!-- Stop button -->
+            <div style="width:72px;height:72px;border-radius:50%;background:var(--red);display:flex;align-items:center;justify-content:center;font-size:28px;cursor:pointer;box-shadow:0 0 0 8px rgba(244,67,54,.15),0 0 0 16px rgba(244,67,54,.07);margin-bottom:32px;">⏹</div>
+
+            <div class="divider" style="width:100%;margin-bottom:20px;"></div>
+
+            <!-- Completed voice note preview -->
+            <div class="section-title" style="width:100%;">Rekaman Sebelumnya</div>
+
+            <div class="card" style="width:100%;">
+              <div class="row between" style="margin-bottom:8px;">
+                <div class="row" style="gap:8px;">
+                  <div style="width:36px;height:36px;border-radius:50%;background:rgba(41,171,226,.15);display:flex;align-items:center;justify-content:center;font-size:18px;">🎵</div>
+                  <div>
+                    <div class="text-sm text-bold">Rekaman Kunjungan</div>
+                    <div class="text-xs text-muted">10 Jun · 02:18 · Transkripsi selesai</div>
+                  </div>
+                </div>
+                <div style="cursor:pointer;font-size:20px;">▶️</div>
+              </div>
+              <!-- Waveform mini -->
+              <div style="height:24px;display:flex;align-items:center;gap:1.5px;margin-bottom:10px;">
+                <div style="width:2px;height:6px;background:var(--primary);border-radius:1px;"></div>
+                <div style="width:2px;height:14px;background:var(--primary);border-radius:1px;"></div>
+                <div style="width:2px;height:20px;background:var(--primary);border-radius:1px;"></div>
+                <div style="width:2px;height:10px;background:var(--primary);border-radius:1px;"></div>
+                <div style="width:2px;height:16px;background:var(--primary);border-radius:1px;"></div>
+                <div style="width:2px;height:8px;background:var(--primary);border-radius:1px;"></div>
+                <div style="width:2px;height:18px;background:var(--primary);border-radius:1px;"></div>
+                <div style="width:2px;height:22px;background:rgba(41,171,226,.4);border-radius:1px;"></div>
+                <div style="width:2px;height:12px;background:rgba(41,171,226,.4);border-radius:1px;"></div>
+                <div style="width:2px;height:18px;background:rgba(41,171,226,.4);border-radius:1px;"></div>
+                <div style="width:2px;height:8px;background:rgba(41,171,226,.3);border-radius:1px;"></div>
+                <div style="width:2px;height:14px;background:rgba(41,171,226,.3);border-radius:1px;"></div>
+              </div>
+              <!-- Transkripsi -->
+              <div style="background:var(--bg-3);border-radius:8px;padding:10px;border:1px solid var(--border);">
+                <div class="text-xs text-muted" style="margin-bottom:4px;">📝 Transkripsi Otomatis:</div>
+                <div class="text-xs" style="color:var(--text);line-height:1.6;">
+                  "Client setuju presentasi minggu depan. Mereka butuh revisi harga untuk modul HR, minta diskon sekitar 15 persen. Jadwalkan meeting Jumat jam 10 pagi..."
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════
+       FASE 3 — SCREEN 14: OFFLINE MODE
+  ══════════════════════════════════════════ -->
+  <div class="screen-group" id="screen-offline">
+    <div class="screens-row">
+
+      <div class="phone-wrap">
+        <div class="phone-title">14 — Offline Mode (No Connection)</div>
+        <div class="phone">
+          <div class="status-bar" style="background:#1A0A00;">
+            <div class="notch"></div><span>9:41</span>
+            <div class="status-icons"><span>✕✕✕</span><span style="color:#FF6B6B;">No Signal</span><span>🔋</span></div>
+          </div>
+
+          <!-- Offline banner -->
+          <div style="background:rgba(255,140,66,.15);border-bottom:2px solid var(--orange);padding:8px 14px;display:flex;align-items:center;gap:8px;">
+            <span style="font-size:16px;">📶</span>
+            <div class="flex1">
+              <div class="text-xs text-bold" style="color:var(--orange);">Mode Offline Aktif</div>
+              <div class="text-xs text-muted">4 aksi tertunda · Sync otomatis saat online</div>
+            </div>
+            <div class="badge-tag tag-orange" style="font-size:10px;">4 pending</div>
+          </div>
+
+          <div class="app-bar">
+            <div><span class="title">Pipeline</span><span class="subtitle">Data tersimpan lokal</span></div>
+          </div>
+
+          <div class="scroll-body" style="max-height:560px;padding:14px;">
+
+            <!-- Offline queue -->
+            <div class="section-title">Antrean Sinkronisasi</div>
+
+            <div class="card" style="margin-bottom:14px;border-color:rgba(255,140,66,.3);">
+              <div style="font-size:12px;font-weight:700;color:var(--orange);margin-bottom:10px;">⏳ 4 Aksi Menunggu Sinkronisasi</div>
+
+              <div style="background:var(--bg-3);border-radius:8px;padding:10px;margin-bottom:8px;display:flex;gap:8px;align-items:center;">
+                <span style="font-size:16px;">📝</span>
+                <div class="flex1">
+                  <div class="text-sm text-bold">Catat Follow-Up</div>
+                  <div class="text-xs text-muted">PT Sukses Abadi · 10:15 WIB</div>
+                </div>
+                <div class="badge-tag tag-orange" style="font-size:10px;">Pending</div>
+              </div>
+
+              <div style="background:var(--bg-3);border-radius:8px;padding:10px;margin-bottom:8px;display:flex;gap:8px;align-items:center;">
+                <span style="font-size:16px;">📍</span>
+                <div class="flex1">
+                  <div class="text-sm text-bold">Check-in Kunjungan</div>
+                  <div class="text-xs text-muted">CV Berkah Makmur · 09:04 WIB</div>
+                </div>
+                <div class="badge-tag tag-orange" style="font-size:10px;">Pending</div>
+              </div>
+
+              <div style="background:var(--bg-3);border-radius:8px;padding:10px;margin-bottom:8px;display:flex;gap:8px;align-items:center;">
+                <span style="font-size:16px;">🔄</span>
+                <div class="flex1">
+                  <div class="text-sm text-bold">Update Stage Lead</div>
+                  <div class="text-xs text-muted">RM Padang Selera → In Progress</div>
+                </div>
+                <div class="badge-tag tag-orange" style="font-size:10px;">Pending</div>
+              </div>
+
+              <div style="background:var(--bg-3);border-radius:8px;padding:10px;display:flex;gap:8px;align-items:center;">
+                <span style="font-size:16px;">👤</span>
+                <div class="flex1">
+                  <div class="text-sm text-bold">Tambah Kontak Baru</div>
+                  <div class="text-xs text-muted">Ahmad Budi · PT Abadi Sejahtera</div>
+                </div>
+                <div class="badge-tag tag-orange" style="font-size:10px;">Pending</div>
+              </div>
+            </div>
+
+            <!-- Cache info -->
+            <div class="section-title">Data Tersedia Offline</div>
+            <div class="stats-grid" style="margin-bottom:14px;">
+              <div class="stat-card" style="text-align:center;">
+                <div style="font-size:20px;font-weight:800;color:var(--primary);">18</div>
+                <div style="font-size:11px;color:var(--text-muted);">Leads (cached)</div>
+              </div>
+              <div class="stat-card" style="text-align:center;">
+                <div style="font-size:20px;font-weight:800;color:var(--green);">48</div>
+                <div style="font-size:11px;color:var(--text-muted);">Kontak (cached)</div>
+              </div>
+            </div>
+
+            <div style="background:rgba(41,171,226,.06);border:1px solid rgba(41,171,226,.15);border-radius:10px;padding:12px;display:flex;gap:8px;align-items:flex-start;">
+              <span style="font-size:16px;">ℹ️</span>
+              <div class="text-xs text-muted" style="line-height:1.6;">Semua aksi yang dilakukan saat offline akan tersimpan aman dan disinkronkan otomatis begitu koneksi internet tersedia kembali.</div>
+            </div>
+          </div>
+
+          <div class="bottom-nav">
+            <div class="nav-item"><span class="nav-icon">🏠</span>Home</div>
+            <div class="nav-item active"><span class="nav-icon">📋</span>Pipeline<div class="nav-dot"></div></div>
+            <div class="nav-item"><span class="nav-icon">📅</span>Jadwal</div>
+            <div class="nav-item" style="position:relative;">
+              <span class="nav-icon">📶</span>Offline
+              <div style="position:absolute;top:0;right:8px;width:8px;height:8px;background:var(--orange);border-radius:50%;"></div>
+            </div>
+            <div class="nav-item"><span class="nav-icon">👤</span>Profil</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Sync completed state -->
+      <div class="phone-wrap">
+        <div class="phone-title">14b — Sync Selesai (Kembali Online)</div>
+        <div class="phone">
+          <div class="status-bar"><div class="notch"></div><span>9:41</span><div class="status-icons"><span>●●●</span><span>WiFi</span><span>🔋</span></div></div>
+
+          <!-- Sync success banner -->
+          <div style="background:rgba(76,175,80,.12);border-bottom:2px solid var(--green);padding:12px 14px;display:flex;align-items:center;gap:10px;">
+            <span style="font-size:22px;">✅</span>
+            <div class="flex1">
+              <div class="text-sm text-bold" style="color:var(--green);">Sinkronisasi Selesai!</div>
+              <div class="text-xs text-muted">4 aksi berhasil disinkronkan · Baru saja</div>
+            </div>
+          </div>
+
+          <div class="app-bar">
+            <div><span class="title">Pipeline</span><span class="subtitle">Online · Data terkini</span></div>
+          </div>
+
+          <div style="padding:24px 20px;text-align:center;">
+            <div style="font-size:56px;margin-bottom:14px;">🎉</div>
+            <div style="font-size:18px;font-weight:800;color:#E2E8F0;margin-bottom:8px;">Semua Data Tersinkron</div>
+            <div class="text-sm text-muted" style="margin-bottom:24px;line-height:1.6;">4 aksi yang dilakukan saat offline telah berhasil disinkronkan ke server APEX.</div>
+
+            <div style="background:var(--bg-2);border-radius:12px;padding:14px;margin-bottom:20px;text-align:left;">
+              <div style="display:flex;flex-direction:column;gap:8px;">
+                <div class="row" style="gap:8px;"><span>✅</span><div class="text-sm">Follow-up PT Sukses Abadi tersimpan</div></div>
+                <div class="row" style="gap:8px;"><span>✅</span><div class="text-sm">Check-in CV Berkah Makmur tersimpan</div></div>
+                <div class="row" style="gap:8px;"><span>✅</span><div class="text-sm">Stage RM Padang Selera diperbarui</div></div>
+                <div class="row" style="gap:8px;"><span>✅</span><div class="text-sm">Kontak Ahmad Budi ditambahkan</div></div>
+              </div>
+            </div>
+
+            <div class="btn">Lanjutkan</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════
+       FASE 3 — SCREEN 15: ANALITIK PERSONAL
+  ══════════════════════════════════════════ -->
+  <div class="screen-group" id="screen-analitik">
+    <div class="screens-row">
+
+      <div class="phone-wrap">
+        <div class="phone-title">15 — Analitik Personal</div>
+        <div class="phone">
+          <div class="status-bar"><div class="notch"></div><span>9:41</span><div class="status-icons"><span>●●●</span><span>WiFi</span><span>🔋</span></div></div>
+          <div class="app-bar">
+            <div><span class="title">Performa Saya</span><span class="subtitle">Juni 2026</span></div>
+            <div class="action-btn">📅</div>
+          </div>
+
+          <div class="scroll-body" style="max-height:640px;">
+
+            <!-- Score card -->
+            <div style="background:linear-gradient(175deg,#020810,#04101E,#071828);padding:20px 16px;border-bottom:1px solid rgba(41,171,226,.15);">
+              <div style="text-align:center;margin-bottom:16px;">
+                <div style="font-size:11px;color:rgba(255,255,255,.5);letter-spacing:1px;margin-bottom:8px;">PERFORMANCE SCORE</div>
+                <div style="font-size:56px;font-weight:900;color:#29ABE2;line-height:1;">82</div>
+                <div style="font-size:13px;color:rgba(255,255,255,.5);margin-top:4px;">dari 100 · <span style="color:#69D96D;">+8 vs bulan lalu</span></div>
+              </div>
+              <!-- Score breakdown bar -->
+              <div style="background:rgba(255,255,255,.08);border-radius:6px;height:8px;overflow:hidden;margin-bottom:6px;">
+                <div style="background:linear-gradient(90deg,#29ABE2,#69D96D);width:82%;height:100%;border-radius:6px;"></div>
+              </div>
+              <div class="row between">
+                <div class="text-xs text-muted">0</div>
+                <div class="text-xs" style="color:#29ABE2;font-weight:600;">82 / 100</div>
+                <div class="text-xs text-muted">100</div>
+              </div>
+            </div>
+
+            <div style="padding:14px 16px;">
+
+              <!-- KPI Grid -->
+              <div class="section-title">KPI Bulan Ini</div>
+              <div class="stats-grid" style="margin-bottom:14px;">
+                <div class="stat-card" style="border-left:3px solid var(--primary);">
+                  <div class="text-xs text-muted">Leads Baru</div>
+                  <div class="row between" style="margin-top:4px;align-items:flex-end;">
+                    <div class="stat-value">12</div>
+                    <div class="text-xs" style="color:var(--green);">↑ target 10</div>
+                  </div>
+                  <div class="progress-wrap" style="margin-top:6px;"><div class="progress-fill" style="width:100%;background:var(--primary);"></div></div>
+                </div>
+                <div class="stat-card" style="border-left:3px solid var(--green);">
+                  <div class="text-xs text-muted">Win Rate</div>
+                  <div class="row between" style="margin-top:4px;align-items:flex-end;">
+                    <div class="stat-value" style="color:var(--green);">57%</div>
+                    <div class="text-xs" style="color:var(--green);">↑ +7%</div>
+                  </div>
+                  <div class="progress-wrap" style="margin-top:6px;"><div class="progress-fill" style="width:57%;background:var(--green);"></div></div>
+                </div>
+                <div class="stat-card" style="border-left:3px solid var(--pkp-yellow);">
+                  <div class="text-xs text-muted">FU Rate</div>
+                  <div class="row between" style="margin-top:4px;align-items:flex-end;">
+                    <div class="stat-value" style="color:var(--pkp-yellow);">89%</div>
+                    <div class="text-xs text-muted">target 90%</div>
+                  </div>
+                  <div class="progress-wrap" style="margin-top:6px;"><div class="progress-fill" style="width:89%;background:var(--pkp-yellow);"></div></div>
+                </div>
+                <div class="stat-card" style="border-left:3px solid var(--orange);">
+                  <div class="text-xs text-muted">Pipeline Value</div>
+                  <div class="row between" style="margin-top:4px;align-items:flex-end;">
+                    <div class="stat-value" style="color:var(--orange);font-size:17px;">2,4M</div>
+                    <div class="text-xs text-muted">/ 4M</div>
+                  </div>
+                  <div class="progress-wrap" style="margin-top:6px;"><div class="progress-fill" style="width:60%;background:var(--orange);"></div></div>
+                </div>
+              </div>
+
+              <!-- Weekly Activity Chart -->
+              <div class="section-title">Aktivitas 4 Minggu Terakhir</div>
+              <div class="card" style="margin-bottom:14px;">
+                <div class="chart-bars" style="margin-bottom:28px;height:80px;">
+                  <div class="chart-bar" style="height:50%;background:rgba(41,171,226,.4);">
+                    <span class="bar-val">8</span><span class="bar-label">Mg 1</span>
+                  </div>
+                  <div class="chart-bar" style="height:75%;background:rgba(41,171,226,.6);">
+                    <span class="bar-val">12</span><span class="bar-label">Mg 2</span>
+                  </div>
+                  <div class="chart-bar" style="height:65%;background:rgba(41,171,226,.6);">
+                    <span class="bar-val">10</span><span class="bar-label">Mg 3</span>
+                  </div>
+                  <div class="chart-bar active" style="height:90%;">
+                    <span class="bar-val">19</span><span class="bar-label">Mg 4</span>
+                  </div>
+                </div>
+                <div class="row between">
+                  <div class="text-xs text-muted">Total FU bulan ini</div>
+                  <div class="text-sm text-bold text-primary">49 follow-up</div>
+                </div>
+              </div>
+
+              <!-- Pipeline funnel mini -->
+              <div class="section-title">Pipeline Funnel</div>
+              <div class="card">
+                <div style="display:flex;flex-direction:column;gap:6px;">
+                  <div>
+                    <div class="row between" style="margin-bottom:3px;"><div class="text-xs text-muted">New</div><div class="text-xs text-bold">3</div></div>
+                    <div class="progress-wrap"><div class="progress-fill" style="width:100%;background:var(--text-light);"></div></div>
+                  </div>
+                  <div>
+                    <div class="row between" style="margin-bottom:3px;"><div class="text-xs text-muted">In Progress</div><div class="text-xs text-bold">5</div></div>
+                    <div class="progress-wrap"><div class="progress-fill" style="width:83%;background:#29ABE2;"></div></div>
+                  </div>
+                  <div>
+                    <div class="row between" style="margin-bottom:3px;"><div class="text-xs text-muted">Proposal Sent</div><div class="text-xs text-bold">4</div></div>
+                    <div class="progress-wrap"><div class="progress-fill" style="width:66%;background:#F7B731;"></div></div>
+                  </div>
+                  <div>
+                    <div class="row between" style="margin-bottom:3px;"><div class="text-xs text-muted">Negotiation</div><div class="text-xs text-bold">3</div></div>
+                    <div class="progress-wrap"><div class="progress-fill" style="width:50%;background:#FF8C42;"></div></div>
+                  </div>
+                  <div>
+                    <div class="row between" style="margin-bottom:3px;"><div class="text-xs text-muted">Won</div><div class="text-xs text-bold" style="color:var(--green);">4</div></div>
+                    <div class="progress-wrap"><div class="progress-fill" style="width:33%;background:var(--green);"></div></div>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+          <div class="bottom-nav">
+            <div class="nav-item"><span class="nav-icon">🏠</span>Home</div>
+            <div class="nav-item"><span class="nav-icon">📋</span>Pipeline</div>
+            <div class="nav-item"><span class="nav-icon">📅</span>Jadwal</div>
+            <div class="nav-item"><span class="nav-icon">📍</span>Check-in</div>
+            <div class="nav-item active"><span class="nav-icon">👤</span>Profil<div class="nav-dot"></div></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+<script>
+function showScreen(id) {
+  document.querySelectorAll('.screen-group').forEach(g => g.classList.remove('visible'));
+  document.querySelectorAll('.screen-tabs button').forEach(b => b.classList.remove('active'));
+  document.getElementById('screen-' + id).classList.add('visible');
+  event.target.classList.add('active');
+  window.scrollTo({top: 0, behavior: 'smooth'});
+}
+</script>
+</body>
+</html>

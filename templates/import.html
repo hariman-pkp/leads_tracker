@@ -1,0 +1,213 @@
+{% extends "base.html" %}
+{% block title %}Import Excel{% endblock %}
+{% block page_title %}Import Data dari Excel{% endblock %}
+
+{% block content %}
+
+{# ── HASIL IMPORT ──────────────────────────────────────────────────────────── #}
+{% if results is defined and results %}
+<div class="bg-white rounded-xl border border-gray-100 shadow-sm p-5 mb-5">
+  <div class="flex items-center gap-3 mb-4">
+    <div class="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
+      <i class="fas fa-check-circle text-green-600 text-lg"></i>
+    </div>
+    <div>
+      <div class="font-semibold text-gray-800">Import Berhasil</div>
+      <div class="text-sm text-gray-500">File: <span class="font-medium">{{ filename }}</span> — Mode: <span class="font-medium">{{ 'Replace (hapus lama)' if mode == 'replace' else 'Append (upsert)' }}</span></div>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+    {% if results.pipeline is defined %}
+    <div class="bg-blue-50 rounded-lg p-3 text-center">
+      <div class="text-2xl font-bold text-blue-700">{{ results.pipeline }}</div>
+      <div class="text-xs text-blue-600 mt-1"><i class="fas fa-funnel-dollar mr-1"></i>Pipeline / Leads</div>
+    </div>
+    {% endif %}
+    {% if results.revenue is defined %}
+    <div class="bg-emerald-50 rounded-lg p-3 text-center">
+      <div class="text-2xl font-bold text-emerald-700">{{ results.revenue }}</div>
+      <div class="text-xs text-emerald-600 mt-1"><i class="fas fa-chart-bar mr-1"></i>Revenue Projects</div>
+    </div>
+    {% endif %}
+    {% if results.invoice is defined %}
+    <div class="bg-purple-50 rounded-lg p-3 text-center">
+      <div class="text-2xl font-bold text-purple-700">{{ results.invoice }}</div>
+      <div class="text-xs text-purple-600 mt-1"><i class="fas fa-file-invoice mr-1"></i>Invoice</div>
+    </div>
+    {% endif %}
+    {% if results.kpi is defined %}
+    <div class="bg-orange-50 rounded-lg p-3 text-center">
+      <div class="text-2xl font-bold text-orange-700">{{ results.kpi }}</div>
+      <div class="text-xs text-orange-600 mt-1"><i class="fas fa-bullseye mr-1"></i>KPI Prospecting</div>
+    </div>
+    {% endif %}
+  </div>
+
+  {% if errors %}
+  <div class="mt-4 bg-red-50 border border-red-200 rounded-lg p-3">
+    <div class="text-sm font-semibold text-red-700 mb-1"><i class="fas fa-exclamation-triangle mr-1"></i>Ada sheet yang gagal diproses:</div>
+    {% for e in errors %}
+    <div class="text-xs text-red-600 font-mono mt-1">{{ e }}</div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <div class="mt-4 flex gap-3">
+    <a href="/pipeline" class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition-colors">
+      <i class="fas fa-funnel-dollar mr-1"></i> Lihat Pipeline
+    </a>
+    <a href="/revenue/tracker" class="px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm hover:bg-emerald-700 transition-colors">
+      <i class="fas fa-chart-bar mr-1"></i> Lihat Revenue
+    </a>
+    <a href="/import" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm hover:bg-gray-200 transition-colors">
+      <i class="fas fa-upload mr-1"></i> Import Lagi
+    </a>
+  </div>
+</div>
+{% endif %}
+
+{% if error is defined and error %}
+<div class="bg-red-50 border border-red-200 rounded-xl p-4 mb-5 text-red-700 text-sm">
+  <i class="fas fa-times-circle mr-2"></i>{{ error }}
+</div>
+{% endif %}
+
+{# ── FORM UPLOAD ───────────────────────────────────────────────────────────── #}
+<div class="bg-white rounded-xl border border-gray-100 shadow-sm p-5 mb-5">
+  <h2 class="font-semibold text-gray-800 mb-1">Upload File Excel</h2>
+  <p class="text-sm text-gray-500 mb-4">Sistem akan otomatis mendeteksi sheet Pipeline, Revenue Tracker, Invoice, dan KPI berdasarkan nama sheet.</p>
+
+  <form method="post" action="/import" enctype="multipart/form-data"
+        x-data="{ fileName: '', loading: false }"
+        @submit="loading = true">
+
+    {# Drop area #}
+    <label for="file-input"
+           class="flex flex-col items-center justify-center w-full border-2 border-dashed border-gray-300 rounded-xl py-10 px-4 cursor-pointer hover:border-blue-400 hover:bg-blue-50/30 transition-colors mb-4"
+           :class="fileName ? 'border-green-400 bg-green-50/30' : ''">
+      <i class="fas text-3xl mb-3" :class="fileName ? 'fa-file-excel text-green-500' : 'fa-cloud-upload-alt text-gray-400'"></i>
+      <div class="text-sm font-medium text-gray-600" x-text="fileName || 'Klik atau drag file Excel di sini'"></div>
+      <div class="text-xs text-gray-400 mt-1" x-show="!fileName">Format: .xlsx atau .xls</div>
+      <input id="file-input" type="file" name="file" accept=".xlsx,.xls" class="hidden"
+             @change="fileName = $event.target.files[0]?.name || ''" required>
+    </label>
+
+    {# Mode import #}
+    <div class="mb-4">
+      <label class="block text-sm font-medium text-gray-700 mb-2">Mode Import</label>
+      <div class="flex gap-4">
+        <label class="flex items-start gap-2 cursor-pointer">
+          <input type="radio" name="mode" value="append" checked class="mt-0.5 accent-blue-600">
+          <div>
+            <div class="text-sm font-medium text-gray-700">Append / Upsert</div>
+            <div class="text-xs text-gray-500">Data baru ditambahkan. Data yang sudah ada (sama ID) diupdate. Data lain tidak dihapus.</div>
+          </div>
+        </label>
+        <label class="flex items-start gap-2 cursor-pointer">
+          <input type="radio" name="mode" value="replace" class="mt-0.5 accent-red-500">
+          <div>
+            <div class="text-sm font-medium text-gray-700">Replace</div>
+            <div class="text-xs text-red-500">⚠️ Hapus semua data lama terlebih dahulu, lalu insert dari file Excel. Tidak bisa dibatalkan.</div>
+          </div>
+        </label>
+      </div>
+    </div>
+
+    <button type="submit"
+            class="px-5 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors flex items-center gap-2 disabled:opacity-60"
+            :disabled="loading || !fileName">
+      <i class="fas" :class="loading ? 'fa-spinner fa-spin' : 'fa-upload'"></i>
+      <span x-text="loading ? 'Memproses...' : 'Mulai Import'"></span>
+    </button>
+  </form>
+</div>
+
+{# ── PANDUAN FORMAT ────────────────────────────────────────────────────────── #}
+<div class="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+  <h2 class="font-semibold text-gray-800 mb-3"><i class="fas fa-info-circle text-blue-500 mr-2"></i>Format Excel yang Didukung</h2>
+
+  <div class="space-y-4 text-sm">
+
+    <div class="border border-gray-100 rounded-lg overflow-hidden">
+      <div class="bg-blue-50 px-4 py-2 font-semibold text-blue-800 flex items-center gap-2">
+        <i class="fas fa-funnel-dollar"></i> Sheet: Pipeline
+      </div>
+      <div class="px-4 py-3 text-gray-600">
+        <p class="mb-2">Nama sheet harus mengandung kata <code class="bg-gray-100 px-1 rounded">pipeline</code> (tidak case-sensitive).</p>
+        <div class="overflow-x-auto">
+          <table class="text-xs border-collapse w-full">
+            <tr class="bg-gray-50">
+              {% for col in ['ID','Nama Company','Product','Contact Person','Segmen','Sub-segmen','Source','Stage','Prioritas','Tgl Masuk','Propose Value','Deal Value (Rp)','Probability (%)','Exp. Close Date','Sales Owner','Next FU Date','Last FU Date','Last FU Notes','Remarks'] %}
+              <th class="border border-gray-200 px-2 py-1 font-medium text-gray-700 whitespace-nowrap">{{ col }}</th>
+              {% endfor %}
+            </tr>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="border border-gray-100 rounded-lg overflow-hidden">
+      <div class="bg-emerald-50 px-4 py-2 font-semibold text-emerald-800 flex items-center gap-2">
+        <i class="fas fa-chart-bar"></i> Sheet: Revenue Tracker
+      </div>
+      <div class="px-4 py-3 text-gray-600">
+        <p class="mb-2">Nama sheet harus mengandung kata <code class="bg-gray-100 px-1 rounded">revenue tracker</code> atau <code class="bg-gray-100 px-1 rounded">revenue</code>.</p>
+        <div class="overflow-x-auto">
+          <table class="text-xs border-collapse w-full">
+            <tr class="bg-gray-50">
+              {% for col in ['Project ID','LOB','Owner','Product','Client','Kategori','Type','Target Month','Revenue Target','Actual Revenue','Invoice Date','Payment Date','PIC','Notes'] %}
+              <th class="border border-gray-200 px-2 py-1 font-medium text-gray-700 whitespace-nowrap">{{ col }}</th>
+              {% endfor %}
+            </tr>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="border border-gray-100 rounded-lg overflow-hidden">
+      <div class="bg-purple-50 px-4 py-2 font-semibold text-purple-800 flex items-center gap-2">
+        <i class="fas fa-file-invoice"></i> Sheet: Detail Invoice
+      </div>
+      <div class="px-4 py-3 text-gray-600">
+        <p class="mb-2">Nama sheet harus mengandung kata <code class="bg-gray-100 px-1 rounded">invoice</code>.</p>
+        <div class="overflow-x-auto">
+          <table class="text-xs border-collapse w-full">
+            <tr class="bg-gray-50">
+              {% for col in ['Project ID','LOB','Owner','Product','Client','Invoice No','Invoice Date','Period','Invoice Amount','Paid Amount','Paid Date','Notes'] %}
+              <th class="border border-gray-200 px-2 py-1 font-medium text-gray-700 whitespace-nowrap">{{ col }}</th>
+              {% endfor %}
+            </tr>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="border border-gray-100 rounded-lg overflow-hidden">
+      <div class="bg-orange-50 px-4 py-2 font-semibold text-orange-800 flex items-center gap-2">
+        <i class="fas fa-bullseye"></i> Sheet: KPI Prospecting (Opsional)
+      </div>
+      <div class="px-4 py-3 text-gray-600">
+        <p class="mb-2">Nama sheet harus mengandung kata <code class="bg-gray-100 px-1 rounded">kpi</code>.</p>
+        <div class="overflow-x-auto">
+          <table class="text-xs border-collapse w-full">
+            <tr class="bg-gray-50">
+              {% for col in ['KPI Category','KPI Name','Unit','Target Annual','Q1 Target','Q1 Actual','Q2 Target','Q2 Actual','Q3 Target','Q3 Actual','Q4 Target','Q4 Actual'] %}
+              <th class="border border-gray-200 px-2 py-1 font-medium text-gray-700 whitespace-nowrap">{{ col }}</th>
+              {% endfor %}
+            </tr>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="mt-4 bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-xs text-yellow-800">
+    <i class="fas fa-lightbulb mr-1"></i>
+    <strong>Tips:</strong> File Excel boleh berisi satu atau lebih sheet sekaligus. Sistem akan memproses sheet yang namanya cocok dan mengabaikan sheet lain.
+    Pipeline ID harus format <code class="bg-yellow-100 px-1 rounded">LD-XXX</code> dan Revenue ID harus angka (akan dikonversi ke <code class="bg-yellow-100 px-1 rounded">REV-XXXX</code>).
+  </div>
+</div>
+
+{% endblock %}

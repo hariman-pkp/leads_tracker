@@ -1,0 +1,162 @@
+{% extends "base.html" %}
+{% block title %}KPI Prospecting{% endblock %}
+{% block page_title %}KPI Prospecting Dashboard 2026{% endblock %}
+
+{% block content %}
+
+{% set cat_icons = {
+  'LEAD GENERATION': ('fa-users','blue'),
+  'CONVERSION METRICS': ('fa-exchange-alt','green'),
+  'PIPELINE HEALTH': ('fa-heartbeat','purple'),
+  'ACTIVITY METRICS': ('fa-running','orange'),
+} %}
+
+{% for category, kpi_list in grouped.items() %}
+{% set icon_info = cat_icons.get(category, ('fa-chart-bar','gray')) %}
+<div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden mb-5">
+  {# Category header #}
+  <div class="px-5 py-4 bg-{{ icon_info[1] }}-50 border-b border-{{ icon_info[1] }}-100 flex items-center gap-3">
+    <div class="w-9 h-9 bg-{{ icon_info[1] }}-600 rounded-xl flex items-center justify-center flex-shrink-0">
+      <i class="fas {{ icon_info[0] }} text-white text-sm"></i>
+    </div>
+    <div>
+      <h2 class="font-bold text-gray-800 text-sm">{{ category }}</h2>
+      <p class="text-xs text-gray-500 mt-0.5">{{ kpi_list|length }} KPI indicators</p>
+    </div>
+  </div>
+
+  {# KPI Cards — mobile #}
+  <div class="lg:hidden p-4 space-y-4">
+    {% for k in kpi_list %}
+    {% set ytd = k.q1_actual + k.q2_actual + k.q3_actual + k.q4_actual %}
+    {% set pct = (ytd / k.target_annual * 100)|round(1) if k.target_annual else 0 %}
+    <div class="border border-gray-100 rounded-xl p-4" x-data="{ edit: false }">
+      <div class="flex items-center justify-between mb-3">
+        <div class="font-medium text-sm text-gray-800">{{ k.kpi_name }}</div>
+        <span class="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">{{ k.unit }}</span>
+      </div>
+      {# Q progress #}
+      <div class="grid grid-cols-4 gap-2 text-xs text-center mb-3">
+        {% for q in range(1,5) %}
+        {% set qt = k['q' ~ q ~ '_target'] %}
+        {% set qa = k['q' ~ q ~ '_actual'] %}
+        {% set qpct = (qa/qt*100)|round(0)|int if qt else 0 %}
+        <div class="bg-gray-50 rounded-lg p-2">
+          <div class="text-gray-400 font-semibold">Q{{ q }}</div>
+          <div class="font-bold {% if qpct>=100 %}text-green-600{% elif qpct>=70 %}text-yellow-600{% else %}text-gray-500{% endif %}">
+            {{ qa|int }}
+          </div>
+          <div class="text-gray-400">/ {{ qt|int }}</div>
+          {% if qt %}
+          <div class="mt-1 bg-gray-200 rounded-full h-1">
+            <div class="h-1 rounded-full {% if qpct>=100 %}bg-green-500{% elif qpct>=70 %}bg-yellow-500{% else %}bg-red-400{% endif %}"
+                 style="width: {{ [qpct,100]|min }}%"></div>
+          </div>
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
+      <div class="flex items-center justify-between text-xs">
+        <span class="text-gray-500">YTD: <strong>{{ ytd|int }}</strong> / Target: <strong>{{ k.target_annual|int }}</strong> {{ k.unit }}</span>
+        <span class="font-bold {% if pct>=100 %}text-green-600{% elif pct>=70 %}text-yellow-600{% else %}text-red-500{% endif %}">{{ pct }}%</span>
+      </div>
+      <div class="bg-gray-100 rounded-full h-2 mt-1">
+        <div class="h-2 rounded-full {% if pct>=100 %}bg-green-500{% elif pct>=70 %}bg-yellow-500{% else %}bg-red-400{% endif %}"
+             style="width: {{ [pct,100]|min }}%"></div>
+      </div>
+      <button @click="edit=!edit" class="mt-2 w-full text-xs text-blue-600 font-medium py-1 border-t border-gray-50 hover:text-blue-800">
+        <i class="fas fa-edit mr-1"></i>Update Actual
+      </button>
+      <form x-show="edit" x-cloak method="post" action="/revenue/kpi/{{ k.id }}/update" class="mt-2 grid grid-cols-2 gap-2">
+        {% for q in range(1,5) %}
+        <div>
+          <label class="text-xs text-gray-400 mb-0.5 block">Q{{ q }} Actual</label>
+          <input type="number" name="q{{ q }}_actual" value="{{ k['q' ~ q ~ '_actual']|int }}"
+            class="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+        </div>
+        {% endfor %}
+        <div class="col-span-2 flex gap-2 mt-1">
+          <button type="submit" class="flex-1 bg-blue-600 text-white py-2 rounded-lg text-xs font-medium">Simpan</button>
+          <button type="button" @click="edit=false" class="px-3 text-gray-400 text-xs hover:text-gray-600">Batal</button>
+        </div>
+      </form>
+    </div>
+    {% endfor %}
+  </div>
+
+  {# Desktop table #}
+  <div class="hidden lg:block overflow-x-auto">
+    <table class="w-full text-sm">
+      <thead class="bg-gray-50 text-gray-400 text-xs uppercase border-b border-gray-100">
+        <tr>
+          <th class="px-4 py-3 text-left">KPI</th>
+          <th class="px-4 py-3 text-center">Unit</th>
+          <th class="px-4 py-3 text-right">Target 2026</th>
+          <th class="px-4 py-3 text-center">Q1 Target/Actual</th>
+          <th class="px-4 py-3 text-center">Q2 Target/Actual</th>
+          <th class="px-4 py-3 text-center">Q3 Target/Actual</th>
+          <th class="px-4 py-3 text-center">Q4 Target/Actual</th>
+          <th class="px-4 py-3 text-center">YTD</th>
+          <th class="px-4 py-3 text-center">Achievement</th>
+          <th class="px-4 py-3 text-center">Aksi</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-gray-50">
+        {% for k in kpi_list %}
+        {% set ytd = k.q1_actual + k.q2_actual + k.q3_actual + k.q4_actual %}
+        {% set pct = (ytd / k.target_annual * 100)|round(1) if k.target_annual else 0 %}
+        <tr class="hover:bg-gray-50 transition-colors" x-data="{ edit: false }">
+          <td class="px-4 py-3 font-medium text-gray-800 max-w-[200px]">{{ k.kpi_name }}</td>
+          <td class="px-4 py-3 text-center"><span class="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">{{ k.unit }}</span></td>
+          <td class="px-4 py-3 text-right font-semibold text-gray-700">{{ k.target_annual|int }}</td>
+          {% for q in range(1,5) %}
+          {% set qt = k['q' ~ q ~ '_target'] %}
+          {% set qa = k['q' ~ q ~ '_actual'] %}
+          {% set qpct = (qa/qt*100)|round(0)|int if qt else 0 %}
+          <td class="px-4 py-3 text-center" x-show="!edit">
+            <div class="text-xs text-gray-500 mb-0.5">{{ qt|int }} / <span class="font-semibold {% if qpct>=100 %}text-green-600{% elif qpct>=70 %}text-yellow-600{% else %}text-gray-500{% endif %}">{{ qa|int }}</span></div>
+            {% if qt %}
+            <div class="w-16 mx-auto bg-gray-200 rounded-full h-1.5">
+              <div class="h-1.5 rounded-full {% if qpct>=100 %}bg-green-500{% elif qpct>=70 %}bg-yellow-500{% else %}bg-red-400{% endif %}"
+                   style="width: {{ [qpct,100]|min }}%"></div>
+            </div>
+            {% endif %}
+          </td>
+          {% endfor %}
+          <td class="px-4 py-3 text-center font-bold text-gray-800" x-show="!edit">{{ ytd|int }}</td>
+          <td class="px-4 py-3 text-center" x-show="!edit">
+            <div class="flex items-center gap-1.5 justify-center">
+              <div class="w-12 bg-gray-200 rounded-full h-1.5">
+                <div class="h-1.5 rounded-full {% if pct>=100 %}bg-green-500{% elif pct>=70 %}bg-yellow-500{% else %}bg-red-400{% endif %}"
+                     style="width: {{ [pct,100]|min }}%"></div>
+              </div>
+              <span class="text-xs font-bold {% if pct>=100 %}text-green-700{% elif pct>=70 %}text-yellow-700{% else %}text-red-600{% endif %}">{{ pct }}%</span>
+            </div>
+          </td>
+          <td class="px-4 py-3 text-center" x-show="!edit">
+            <button @click="edit=true" class="text-xs text-blue-500 hover:text-blue-700 px-2 py-1 hover:bg-blue-50 rounded transition">
+              <i class="fas fa-edit"></i>
+            </button>
+          </td>
+          {# Edit row #}
+          <td colspan="7" class="px-4 py-2" x-show="edit" x-cloak>
+            <form method="post" action="/revenue/kpi/{{ k.id }}/update" class="flex gap-3 items-center flex-wrap">
+              {% for q in range(1,5) %}
+              <div class="flex items-center gap-1.5">
+                <label class="text-xs text-gray-500">Q{{ q }}:</label>
+                <input type="number" name="q{{ q }}_actual" value="{{ k['q' ~ q ~ '_actual']|int }}"
+                  class="border border-gray-200 rounded px-2 py-1 text-sm w-20 focus:outline-none focus:ring-2 focus:ring-blue-400">
+              </div>
+              {% endfor %}
+              <button type="submit" class="bg-blue-600 text-white px-3 py-1 rounded text-xs font-medium">Simpan</button>
+              <button type="button" @click="edit=false" class="text-gray-400 text-xs px-2">Batal</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endfor %}
+{% endblock %}

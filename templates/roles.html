@@ -1,0 +1,180 @@
+{% extends "base.html" %}
+{% block title %}Role & Menu{% endblock %}
+{% block page_title %}Master Role & Hak Akses Menu{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+    <!-- Tambah Role -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden" x-data="{ open: false }">
+        <div class="px-5 py-4 flex items-center justify-between bg-gray-50 border-b border-gray-100">
+            <div>
+                <h2 class="font-semibold text-sm text-gray-700"><i class="fas fa-shield-alt text-purple-500 mr-2"></i>Daftar Role</h2>
+                <p class="text-xs text-gray-400 mt-0.5">Kelola role dan menu yang dapat diakses oleh setiap role</p>
+            </div>
+            <button @click="open = !open"
+                class="bg-purple-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-purple-700 transition flex items-center gap-2">
+                <i class="fas fa-plus"></i> Tambah Role
+            </button>
+        </div>
+
+        <div x-show="open" x-cloak class="p-5 border-b border-gray-100 bg-purple-50">
+            <form method="post" action="/roles/new" class="flex flex-wrap gap-3 items-end">
+                <div class="flex-1 min-w-[180px]">
+                    <label class="text-xs text-gray-500 mb-1 block">Nama Role <span class="text-red-400">*</span></label>
+                    <input name="nama" required placeholder="contoh: Supervisor"
+                        class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400">
+                </div>
+                <div class="flex-1 min-w-[240px]">
+                    <label class="text-xs text-gray-500 mb-1 block">Deskripsi</label>
+                    <input name="deskripsi" placeholder="Keterangan singkat role ini"
+                        class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400">
+                </div>
+                <div class="flex gap-2">
+                    <button type="submit" class="bg-purple-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-purple-700 font-medium">
+                        <i class="fas fa-save mr-1"></i> Simpan
+                    </button>
+                    <button type="button" @click="open=false" class="text-gray-400 hover:text-gray-600 px-3 py-2">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Role Cards -->
+    {% for role in roles %}
+    <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden" x-data="{ editMode: false, menuOpen: false }">
+        <!-- Role header -->
+        <div class="px-5 py-4 flex items-start justify-between border-b border-gray-100 bg-gray-50">
+            <div x-show="!editMode">
+                <div class="flex items-center gap-3">
+                    <div class="w-9 h-9 rounded-xl flex items-center justify-center text-white font-bold text-sm
+                        {% if loop.index == 1 %}bg-purple-600
+                        {% elif loop.index == 2 %}bg-blue-600
+                        {% else %}bg-slate-500{% endif %}">
+                        {{ role.nama[0] }}
+                    </div>
+                    <div>
+                        <div class="font-bold text-gray-800">{{ role.nama }}</div>
+                        <div class="text-xs text-gray-500 mt-0.5">{{ role.deskripsi or 'Tidak ada deskripsi' }}</div>
+                    </div>
+                    <span class="bg-gray-100 text-gray-600 text-xs px-2 py-0.5 rounded-full font-medium ml-2">
+                        {{ role.user_count }} user
+                    </span>
+                </div>
+            </div>
+
+            <!-- Edit form inline -->
+            <div x-show="editMode" x-cloak class="flex-1 mr-4">
+                <form method="post" action="/roles/{{ role.id }}/edit" class="flex gap-3 items-end">
+                    <div class="flex-1">
+                        <label class="text-xs text-gray-500 mb-1 block">Nama Role</label>
+                        <input name="nama" value="{{ role.nama }}" required
+                            class="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400">
+                    </div>
+                    <div class="flex-1">
+                        <label class="text-xs text-gray-500 mb-1 block">Deskripsi</label>
+                        <input name="deskripsi" value="{{ role.deskripsi or '' }}"
+                            class="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400">
+                    </div>
+                    <button type="submit" class="bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs hover:bg-green-700 font-medium">
+                        <i class="fas fa-check mr-1"></i>Update
+                    </button>
+                    <button type="button" @click="editMode=false" class="text-gray-400 text-xs px-2 py-1.5">Batal</button>
+                </form>
+            </div>
+
+            <div class="flex items-center gap-2 flex-shrink-0">
+                <button @click="menuOpen = !menuOpen"
+                    class="text-xs px-3 py-1.5 rounded-lg border font-medium transition
+                    {% if role_menus_map.get(role.id) %}border-purple-300 text-purple-600 bg-purple-50 hover:bg-purple-100
+                    {% else %}border-gray-200 text-gray-500 hover:bg-gray-50{% endif %}">
+                    <i class="fas fa-key mr-1"></i>
+                    {{ (role_menus_map.get(role.id) or set())|length }} menu
+                    <i class="fas fa-chevron-down ml-1 text-xs transition-transform" :class="menuOpen ? 'rotate-180' : ''"></i>
+                </button>
+                <button @click="editMode = !editMode; menuOpen = false"
+                    class="text-blue-500 hover:text-blue-700 px-2 py-1.5 text-sm">
+                    <i class="fas fa-edit"></i>
+                </button>
+                {% if role.user_count == 0 %}
+                <form method="post" action="/roles/{{ role.id }}/delete" class="inline"
+                    onsubmit="return confirm('Hapus role {{ role.nama }}?')">
+                    <button type="submit" class="text-red-400 hover:text-red-600 px-2 py-1.5 text-sm">
+                        <i class="fas fa-trash-alt"></i>
+                    </button>
+                </form>
+                {% else %}
+                <span class="text-gray-300 px-2 py-1.5 text-sm" title="Role masih digunakan, tidak bisa dihapus">
+                    <i class="fas fa-trash-alt"></i>
+                </span>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Menu Permission Panel -->
+        <div x-show="menuOpen" x-cloak class="p-5">
+            <form method="post" action="/roles/{{ role.id }}/menus">
+                <div class="mb-4 text-xs text-gray-500 flex items-center gap-2">
+                    <i class="fas fa-info-circle text-blue-400"></i>
+                    Centang menu yang boleh diakses oleh role <strong>{{ role.nama }}</strong>
+                </div>
+
+                {% set current_menus = role_menus_map.get(role.id) or set() %}
+
+                {% set groups = {} %}
+                {% for m in all_menus %}
+                    {% if m.group not in groups %}{% set _ = groups.update({m.group: []}) %}{% endif %}
+                {% endfor %}
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {% for group_name in ['Aktivitas', 'Pipeline', 'Master Data'] %}
+                    <div class="bg-gray-50 rounded-xl p-4">
+                        <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">
+                            {% if group_name == 'Aktivitas' %}<i class="fas fa-bolt text-yellow-400 mr-1"></i>
+                            {% elif group_name == 'Pipeline' %}<i class="fas fa-funnel-dollar text-blue-400 mr-1"></i>
+                            {% else %}<i class="fas fa-database text-purple-400 mr-1"></i>{% endif %}
+                            {{ group_name }}
+                        </div>
+                        <div class="space-y-2">
+                            {% for m in all_menus if m.group == group_name %}
+                            <label class="flex items-center gap-3 cursor-pointer group">
+                                <input type="checkbox" name="menus" value="{{ m.key }}"
+                                    {% if m.key in current_menus %}checked{% endif %}
+                                    class="w-4 h-4 text-purple-600 rounded border-gray-300 focus:ring-purple-500 cursor-pointer">
+                                <span class="flex items-center gap-2 text-sm text-gray-700 group-hover:text-purple-700">
+                                    <i class="fas {{ m.icon }} w-4 text-gray-400 group-hover:text-purple-400 text-xs"></i>
+                                    {{ m.label }}
+                                </span>
+                            </label>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+
+                <div class="mt-4 flex items-center gap-3">
+                    <button type="submit"
+                        class="bg-purple-600 text-white px-5 py-2 rounded-lg text-sm hover:bg-purple-700 transition font-medium">
+                        <i class="fas fa-save mr-1.5"></i>Simpan Hak Akses
+                    </button>
+                    <button type="button" @click="menuOpen = false"
+                        class="text-gray-500 px-4 py-2 text-sm hover:bg-gray-100 rounded-lg">
+                        Tutup
+                    </button>
+                    <span class="text-xs text-gray-400 ml-2">
+                        * Perubahan langsung berlaku saat user login berikutnya
+                    </span>
+                </div>
+            </form>
+        </div>
+    </div>
+    {% else %}
+    <div class="bg-white rounded-xl border border-gray-100 p-12 text-center text-gray-400">
+        <i class="fas fa-shield-alt text-4xl mb-3 block text-gray-200"></i>
+        Belum ada role. Klik "Tambah Role" untuk memulai.
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}

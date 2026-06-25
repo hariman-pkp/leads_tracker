@@ -1,0 +1,501 @@
+{% extends "base.html" %}
+{% block title %}Revenue Insights{% endblock %}
+{% block page_title %}Revenue Insights — Apa Yang Terjadi & Apa Yang Harus Dilakukan{% endblock %}
+
+{% block content %}
+<div class="space-y-8">
+
+{# ══════════════════════════════════════════════════════════════════════════════
+   ALERT BANNER
+══════════════════════════════════════════════════════════════════════════════ #}
+<div class="bg-gradient-to-r from-red-700 to-red-900 rounded-2xl p-5 sm:p-6 text-white shadow-xl">
+  <div class="flex items-start gap-4">
+    <div class="text-3xl sm:text-4xl flex-shrink-0">🚨</div>
+    <div>
+      <h2 class="text-base sm:text-xl font-black mb-2">Revenue LOB DCSS dalam kondisi kritis — butuh tindakan segera</h2>
+      <p class="text-red-100 text-sm leading-relaxed">
+        Dari target <strong class="text-white">Rp {{ "{:,.0f}".format(total_target/1e9) }} Miliar</strong>,
+        baru tercapai <strong class="text-white">Rp {{ "{:,.0f}".format(total_actual/1e9) }} Miliar ({{ ach_pct }}%)</strong>.
+        GAP yang harus dikejar: <strong class="text-white">Rp {{ "{:,.0f}".format(gap/1e9) }} Miliar</strong>.
+        <strong class="text-white">{{ critical_count }}</strong> dari {{ total_projects }} proyek berstatus Critical.
+        Revenue Project hampir tidak bergerak sama sekali (<strong class="text-white">{{ project_ach }}%</strong>).
+      </p>
+    </div>
+  </div>
+</div>
+
+{# ══════════════════════════════════════════════════════════════════════════════
+   BAGIAN 1: APA YANG TERJADI
+══════════════════════════════════════════════════════════════════════════════ #}
+<section>
+  <div class="flex items-center gap-3 mb-5">
+    <div class="w-8 h-8 bg-slate-800 text-white rounded-full flex items-center justify-center font-bold text-sm flex-shrink-0">1</div>
+    <h2 class="text-base sm:text-lg font-bold text-gray-800">Apa Yang Terjadi dengan Revenue?</h2>
+  </div>
+
+  {# KPI Strip #}
+  <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
+    <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-4 text-center">
+      <div class="text-2xl sm:text-3xl font-black text-gray-800">{{ ach_pct }}%</div>
+      <div class="text-xs text-gray-500 mt-1">Achievement YTD</div>
+      <div class="text-xs text-red-500 font-semibold mt-0.5">Target: 100%</div>
+    </div>
+    <div class="bg-red-50 rounded-xl border border-red-200 shadow-sm p-4 text-center">
+      <div class="text-2xl sm:text-3xl font-black text-red-700">{{ project_ach }}%</div>
+      <div class="text-xs text-red-500 mt-1">Revenue Project</div>
+      <div class="text-xs text-red-400 mt-0.5">Rp {{ "{:,.0f}".format(project_actual/1e6) }}Jt / Rp {{ "{:,.0f}".format(project_target/1e9) }}M</div>
+    </div>
+    <div class="bg-amber-50 rounded-xl border border-amber-200 shadow-sm p-4 text-center">
+      <div class="text-2xl sm:text-3xl font-black text-amber-700">{{ recurring_ach }}%</div>
+      <div class="text-xs text-amber-600 mt-1">Revenue Recurring</div>
+      <div class="text-xs text-amber-500 mt-0.5">Rp {{ "{:,.0f}".format(recurring_actual/1e9) }}M / Rp {{ "{:,.0f}".format(recurring_target/1e9) }}M</div>
+    </div>
+    <div class="bg-gray-50 rounded-xl border border-gray-200 shadow-sm p-4 text-center">
+      <div class="text-2xl sm:text-3xl font-black text-gray-700">{{ critical_count }}</div>
+      <div class="text-xs text-gray-500 mt-1">Proyek Critical</div>
+      <div class="text-xs text-gray-400 mt-0.5">dari {{ total_projects }} total proyek</div>
+    </div>
+  </div>
+
+  {# Monthly trend chart + temuan #}
+  <div class="grid grid-cols-1 lg:grid-cols-5 gap-5 mb-5">
+
+    {# Chart #}
+    <div class="lg:col-span-3 bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+      <h3 class="font-semibold text-gray-700 text-sm mb-1">📉 Tren Bulanan — Revenue Mulai Runtuh Juni</h3>
+      <p class="text-xs text-gray-400 mb-4">Target vs Actual per bulan (Rp Miliar)</p>
+      <canvas id="trendChart" height="180"></canvas>
+      <div class="mt-3 flex flex-wrap gap-3 text-xs text-gray-500">
+        <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm bg-gray-200 inline-block"></span> Target</span>
+        <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm bg-blue-500 inline-block"></span> Actual (Jan–Mei)</span>
+        <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm bg-red-400 inline-block"></span> Jun–Des (data/realisasi nol)</span>
+      </div>
+    </div>
+
+    {# Key findings #}
+    <div class="lg:col-span-2 space-y-3">
+      <div class="bg-white rounded-xl border-l-4 border-red-500 shadow-sm p-4">
+        <div class="font-semibold text-sm text-gray-800 mb-1.5 flex items-center gap-2">
+          <span class="text-red-500">📉</span> Revenue Project Hampir Nol
+        </div>
+        <p class="text-xs text-gray-600 leading-relaxed">
+          10 proyek Project dengan target <strong>Rp {{ "{:,.0f}".format(project_target/1e9) }}M</strong>
+          hanya menghasilkan <strong>Rp {{ "{:,.0f}".format(project_actual/1e6) }}Jt ({{ project_ach }}%)</strong>.
+          Seluruh proyek besar bertipe Termin belum ada realisasi sama sekali.
+        </p>
+      </div>
+      <div class="bg-white rounded-xl border-l-4 border-orange-500 shadow-sm p-4">
+        <div class="font-semibold text-sm text-gray-800 mb-1.5 flex items-center gap-2">
+          <span class="text-orange-500">🕳️</span> 13 Proyek dengan Actual = Rp 0
+        </div>
+        <p class="text-xs text-gray-600 leading-relaxed">
+          Termasuk proyek bernilai sangat besar:
+          ITC Finance (<strong>Rp 5.36M</strong>), BANK DKI (<strong>Rp 5M</strong>),
+          Sunline (<strong>Rp 4.5M</strong>), dan Adira (<strong>Rp 4M</strong>).
+          Total potensi yang belum tersentuh: <strong>Rp {{ "{:,.0f}".format(zero_actual_value/1e9) }}M</strong>.
+        </p>
+      </div>
+      <div class="bg-white rounded-xl border-l-4 border-purple-500 shadow-sm p-4">
+        <div class="font-semibold text-sm text-gray-800 mb-1.5 flex items-center gap-2">
+          <span class="text-purple-500">⚠️</span> AMA Jauh Tertinggal
+        </div>
+        <p class="text-xs text-gray-600 leading-relaxed">
+          Owner <strong>AMA</strong> achievement hanya <strong>{{ ama_ach }}%</strong>
+          (Rp {{ "{:,.0f}".format(ama_actual/1e6) }}Jt dari target Rp {{ "{:,.0f}".format(ama_target/1e9) }}M).
+          <strong>EIW</strong> jauh lebih baik di <strong>{{ eiw_ach }}%</strong>.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  {# Zero actual table #}
+  <div class="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden mb-5">
+    <div class="px-4 sm:px-5 py-3 bg-red-50 border-b border-red-100 flex items-center justify-between">
+      <h3 class="font-bold text-red-700 text-sm flex items-center gap-2">
+        <span>💸</span> {{ zero_count }} Proyek dengan Realisasi Nol — Total Target Rp {{ "{:,.0f}".format(zero_actual_value/1e9) }}M
+      </h3>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead class="bg-gray-50 text-gray-400 text-xs uppercase border-b border-gray-100">
+          <tr>
+            <th class="px-4 py-2.5 text-left">Proyek</th>
+            <th class="px-4 py-2.5 text-left">Client</th>
+            <th class="px-4 py-2.5 text-left">Owner</th>
+            <th class="px-4 py-2.5 text-right">Target</th>
+            <th class="px-4 py-2.5 text-center">Type</th>
+            <th class="px-4 py-2.5 text-center">Risk</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-50">
+          {% for p in zero_projects %}
+          <tr class="hover:bg-red-50 transition-colors">
+            <td class="px-4 py-2.5">
+              <div class="font-medium text-gray-800 text-sm">{{ p.product }}</div>
+              <div class="text-xs text-gray-400 font-mono">{{ p.project_id }}</div>
+            </td>
+            <td class="px-4 py-2.5 text-xs text-gray-600">{{ p.client }}</td>
+            <td class="px-4 py-2.5 text-xs text-gray-500">{{ p.owner or '—' }}</td>
+            <td class="px-4 py-2.5 text-right font-mono text-xs font-semibold text-red-600">
+              Rp {{ "{:,.0f}".format(p.revenue_target) }}
+            </td>
+            <td class="px-4 py-2.5 text-center">
+              <span class="text-xs px-2 py-0.5 rounded-full
+                {% if p.type == 'Termin' %}bg-red-100 text-red-700{% elif p.type == 'Tahunan' %}bg-amber-100 text-amber-700{% else %}bg-gray-100 text-gray-600{% endif %}">
+                {{ p.type }}
+              </span>
+            </td>
+            <td class="px-4 py-2.5 text-center">
+              <span class="text-xs font-bold {% if p.risk_level=='HIGH' %}text-red-600{% elif p.risk_level=='MEDIUM' %}text-yellow-600{% else %}text-gray-400{% endif %}">
+                {{ p.risk_level }}
+              </span>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {# Monthly achieve rate #}
+  <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+    <h3 class="font-semibold text-gray-700 text-sm mb-4">📊 Tingkat Keberhasilan per Bulan (Jumlah Proyek Achieve)</h3>
+    <div class="grid grid-cols-6 sm:grid-cols-12 gap-1.5">
+      {% for m in monthly_achieve %}
+      {% set rate = (m.achieved / m.total * 100)|int if m.total else 0 %}
+      <div class="text-center">
+        <div class="text-xs text-gray-400 mb-1">{{ m.month_name[:3] }}</div>
+        <div class="rounded-lg py-2 text-xs font-bold
+          {% if rate >= 50 %}bg-green-500 text-white
+          {% elif rate >= 25 %}bg-yellow-400 text-white
+          {% elif rate > 0 %}bg-orange-400 text-white
+          {% else %}bg-gray-100 text-gray-400{% endif %}">
+          {{ m.achieved }}/{{ m.total }}
+        </div>
+        <div class="text-xs mt-1 font-semibold {% if rate >= 50 %}text-green-600{% elif rate > 0 %}text-orange-500{% else %}text-gray-300{% endif %}">
+          {{ rate }}%
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    <p class="text-xs text-gray-400 mt-3 text-center">
+      💡 Juni: 1 proyek achieve dari 37 · Juli–Desember: 0 proyek achieve (data/realisasi belum masuk)
+    </p>
+  </div>
+</section>
+
+{# ══════════════════════════════════════════════════════════════════════════════
+   BAGIAN 2: KENAPA BISA TERJADI
+══════════════════════════════════════════════════════════════════════════════ #}
+<section>
+  <div class="flex items-center gap-3 mb-5">
+    <div class="w-8 h-8 bg-slate-800 text-white rounded-full flex items-center justify-center font-bold text-sm flex-shrink-0">2</div>
+    <h2 class="text-base sm:text-lg font-bold text-gray-800">Kenapa Bisa Terjadi?</h2>
+  </div>
+
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+
+    <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+      <div class="w-11 h-11 bg-red-100 rounded-xl flex items-center justify-center text-2xl mb-4">⏳</div>
+      <h3 class="font-bold text-gray-800 text-sm mb-2">Proyek Termin Tidak Berjalan</h3>
+      <p class="text-xs text-gray-500 leading-relaxed">
+        Rp 21.8M revenue bergantung pada pembayaran <strong>termin / milestone</strong>.
+        Milestone belum dicapai = tidak ada penagihan = tidak ada revenue.
+        ITC Finance, BANK DKI, Sunline, Adira — semua bertipe Termin dan masih nol.
+      </p>
+      <div class="mt-3 bg-red-50 rounded-lg p-2.5 text-xs text-red-700 font-medium">
+        📊 Bukti: 10 proyek Project Ach 0.7% — hampir semua bertipe Termin
+      </div>
+    </div>
+
+    <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+      <div class="w-11 h-11 bg-amber-100 rounded-xl flex items-center justify-center text-2xl mb-4">🏗️</div>
+      <h3 class="font-bold text-gray-800 text-sm mb-2">Proyek Reengineering Besar Tertunda</h3>
+      <p class="text-xs text-gray-500 leading-relaxed">
+        KSP Sehati memiliki 3 proyek reengineering (Collection System Rp 1.25M,
+        Module Marketing Rp 1.75M, Fincore+) yang target start Q1 2026 namun
+        belum ada realisasi. Keterlambatan di satu proyek memblokir yang lain.
+      </p>
+      <div class="mt-3 bg-amber-50 rounded-lg p-2.5 text-xs text-amber-700 font-medium">
+        📊 Bukti: 3 proyek KSP Sehati = Rp 0 actual dari total target Rp 3M+
+      </div>
+    </div>
+
+    <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+      <div class="w-11 h-11 bg-purple-100 rounded-xl flex items-center justify-center text-2xl mb-4">👤</div>
+      <h3 class="font-bold text-gray-800 text-sm mb-2">Ketimpangan Kinerja AMA vs EIW</h3>
+      <p class="text-xs text-gray-500 leading-relaxed">
+        AMA mengelola 16 proyek dengan target Rp 13.3M namun achievement hanya
+        <strong>6.1%</strong>. Hampir semua proyek besar AMA adalah Project bertipe Termin
+        yang belum berjalan. Beban portofolio tidak proporsional dengan kapasitas delivery.
+      </p>
+      <div class="mt-3 bg-purple-50 rounded-lg p-2.5 text-xs text-purple-700 font-medium">
+        📊 Bukti: AMA Rp 0.81M actual vs EIW Rp 5.16M dari porsi target lebih kecil
+      </div>
+    </div>
+
+    <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+      <div class="w-11 h-11 bg-blue-100 rounded-xl flex items-center justify-center text-2xl mb-4">📋</div>
+      <h3 class="font-bold text-gray-800 text-sm mb-2">Target Terlalu Bergantung Proyek Besar</h3>
+      <p class="text-xs text-gray-500 leading-relaxed">
+        68.4% dari total target (Rp 22M) adalah revenue Project — tipe yang paling
+        tidak pasti karena bergantung penuh pada deal baru + milestone delivery.
+        Jika 1–2 proyek gagal, dampaknya langsung ke overall achievement.
+      </p>
+      <div class="mt-3 bg-blue-50 rounded-lg p-2.5 text-xs text-blue-700 font-medium">
+        📊 Bukti: Recurring (31.6% target) sudah 57% achieve, Project (68.4%) hanya 0.7%
+      </div>
+    </div>
+
+    <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+      <div class="w-11 h-11 bg-orange-100 rounded-xl flex items-center justify-center text-2xl mb-4">📭</div>
+      <h3 class="font-bold text-gray-800 text-sm mb-2">Data Revenue Juli–Des Belum Masuk</h3>
+      <p class="text-xs text-gray-500 leading-relaxed">
+        Seluruh 37 proyek menunjukkan actual = Rp 0 mulai Juli 2026. Ini bisa berarti:
+        (1) memang belum ada realisasi, atau (2) data belum diinput ke sistem.
+        Tanpa data aktual, tidak bisa dilakukan analisis dan intervensi yang tepat.
+      </p>
+      <div class="mt-3 bg-orange-50 rounded-lg p-2.5 text-xs text-orange-700 font-medium">
+        📊 Bukti: Monthly monitoring Jul–Des: 0 proyek achieve dari 37
+      </div>
+    </div>
+
+    <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+      <div class="w-11 h-11 bg-green-100 rounded-xl flex items-center justify-center text-2xl mb-4">📄</div>
+      <h3 class="font-bold text-gray-800 text-sm mb-2">Invoice Outstanding Belum Tertagih</h3>
+      <p class="text-xs text-gray-500 leading-relaxed">
+        Ada {{ outstanding_invoices }} invoice senilai Rp {{ "{:,.0f}".format(outstanding_amount/1e6) }}Jt
+        yang sudah dikirim namun belum lunas. Revenue sudah "earned" tapi
+        cash belum masuk — perlu follow-up aktif ke klien.
+      </p>
+      <div class="mt-3 bg-green-50 rounded-lg p-2.5 text-xs text-green-700 font-medium">
+        📊 Bukti: {{ outstanding_invoices }} invoice outstanding, total Rp {{ "{:,.0f}".format(outstanding_amount/1e6) }}Jt
+      </div>
+    </div>
+
+  </div>
+</section>
+
+{# ══════════════════════════════════════════════════════════════════════════════
+   BAGIAN 3: APA YANG HARUS DILAKUKAN
+══════════════════════════════════════════════════════════════════════════════ #}
+<section>
+  <div class="flex items-center gap-3 mb-5">
+    <div class="w-8 h-8 bg-slate-800 text-white rounded-full flex items-center justify-center font-bold text-sm flex-shrink-0">3</div>
+    <h2 class="text-base sm:text-lg font-bold text-gray-800">Apa Yang Harus Dilakukan?</h2>
+  </div>
+
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+
+    {# Minggu ini #}
+    <div class="bg-red-600 text-white rounded-2xl p-5 shadow-lg">
+      <div class="text-xs font-bold uppercase tracking-wider opacity-75 mb-4">🔥 Minggu Ini — Urgent</div>
+      <div class="space-y-3">
+        <div class="bg-white/10 rounded-xl p-3">
+          <div class="font-bold text-sm mb-1">1. Input Data Juli–Desember</div>
+          <div class="text-xs opacity-80">Cek realisasi aktual Juli–Des dan input ke Monthly Monitoring. Tanpa data, tidak bisa diambil keputusan yang tepat.</div>
+        </div>
+        <div class="bg-white/10 rounded-xl p-3">
+          <div class="font-bold text-sm mb-1">2. Tagih Invoice Outstanding</div>
+          <div class="text-xs opacity-80">{{ outstanding_invoices }} invoice belum lunas — Rp {{ "{:,.0f}".format(outstanding_amount/1e6) }}Jt. Follow-up ke finance klien segera.</div>
+        </div>
+        <div class="bg-white/10 rounded-xl p-3">
+          <div class="font-bold text-sm mb-1">3. Review Milestone Proyek Termin</div>
+          <div class="text-xs opacity-80">Jadwalkan war room ITC Finance + BANK DKI + Sunline. Tetapkan milestone terdekat dan target penagihan Q3.</div>
+        </div>
+        <div class="bg-white/10 rounded-xl p-3">
+          <div class="font-bold text-sm mb-1">4. Rescue Recurring yang Belum Aktif</div>
+          <div class="text-xs opacity-80">FM UI FIFGROUP (Rp 598Jt), VeriID KSP Sehati (Rp 120Jt), FM COLL (Rp 87.5Jt) — sudah ada kontrak tapi belum tagih.</div>
+        </div>
+      </div>
+    </div>
+
+    {# Bulan ini #}
+    <div class="bg-amber-500 text-white rounded-2xl p-5 shadow-lg">
+      <div class="text-xs font-bold uppercase tracking-wider opacity-75 mb-4">📅 Bulan Ini — Penting</div>
+      <div class="space-y-3">
+        <div class="bg-white/10 rounded-xl p-3">
+          <div class="font-bold text-sm mb-1">5. Akselerasi KSP Sehati</div>
+          <div class="text-xs opacity-80">3 proyek reengineering + recurring produk CFin+, E-Materai, Jari, Messaging. Koordinasi delivery dan penagihan termin.</div>
+        </div>
+        <div class="bg-white/10 rounded-xl p-3">
+          <div class="font-bold text-sm mb-1">6. Action Plan AMA</div>
+          <div class="text-xs opacity-80">AMA hanya 6.1% dari target Rp 13.3M. Perlu review portofolio, identifikasi bottleneck, dan support delivery.</div>
+        </div>
+        <div class="bg-white/10 rounded-xl p-3">
+          <div class="font-bold text-sm mb-1">7. Revisi Forecast Q3–Q4</div>
+          <div class="text-xs opacity-80">Update proyeksi revenue yang realistis berdasarkan progress aktual. Flagging proyek yang perlu di-reschedule atau di-cancel.</div>
+        </div>
+        <div class="bg-white/10 rounded-xl p-3">
+          <div class="font-bold text-sm mb-1">8. Weekly Revenue Review</div>
+          <div class="text-xs opacity-80">Meeting mingguan khusus revenue — setiap owner laporan progress proyek dan invoice. Wajib update data ke sistem.</div>
+        </div>
+      </div>
+    </div>
+
+    {# Triwulan #}
+    <div class="bg-blue-700 text-white rounded-2xl p-5 shadow-lg">
+      <div class="text-xs font-bold uppercase tracking-wider opacity-75 mb-4">🎯 Triwulan Ini — Strategis</div>
+      <div class="space-y-3">
+        <div class="bg-white/10 rounded-xl p-3">
+          <div class="font-bold text-sm mb-1">9. Target Realistis H2 2026</div>
+          <div class="text-xs opacity-80">Dengan sisa 6 bulan dan gap Rp 26.2M, tetapkan target yang achievable. Fokus pada proyek yang paling likely to close.</div>
+        </div>
+        <div class="bg-white/10 rounded-xl p-3">
+          <div class="font-bold text-sm mb-1">10. Diversifikasi Revenue Mix</div>
+          <div class="text-xs opacity-80">Kurangi ketergantungan pada Project Termin. Dorong Recurring baru yang lebih predictable dan stabil.</div>
+        </div>
+        <div class="bg-white/10 rounded-xl p-3">
+          <div class="font-bold text-sm mb-1">11. Pipeline-Revenue Linkage</div>
+          <div class="text-xs opacity-80">Hubungkan CRM Pipeline dengan Revenue Tracker. Won deal di CRM harus otomatis masuk sebagai proyek baru di Revenue.</div>
+        </div>
+        <div class="bg-white/10 rounded-xl p-3">
+          <div class="font-bold text-sm mb-1">12. KPI Bulanan per Owner</div>
+          <div class="text-xs opacity-80">Ukur achievement per owner setiap bulan. Buat target antara (Q3: min 40%, Q4: min 60%) agar tidak terlalu terlambat diketahui.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {# Priority action table #}
+  <div class="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+    <div class="px-5 py-4 bg-slate-800 text-white">
+      <h3 class="font-bold text-sm">📋 Priority Action — Proyek yang Harus Diintervensi Sekarang</h3>
+      <p class="text-xs text-slate-400 mt-0.5">Diurutkan berdasarkan nilai × urgensi · Fokus Q3 2026</p>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead class="bg-gray-50 text-gray-400 text-xs uppercase border-b border-gray-100">
+          <tr>
+            <th class="px-4 py-2.5 text-left w-10">#</th>
+            <th class="px-4 py-2.5 text-left">Proyek</th>
+            <th class="px-4 py-2.5 text-left">Client</th>
+            <th class="px-4 py-2.5 text-left">Owner</th>
+            <th class="px-4 py-2.5 text-right">Target (Rp)</th>
+            <th class="px-4 py-2.5 text-center">Type</th>
+            <th class="px-4 py-2.5 text-left">Masalah</th>
+            <th class="px-4 py-2.5 text-left">Tindakan</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-50">
+          {% for a in action_list %}
+          <tr class="hover:bg-gray-50 transition-colors">
+            <td class="px-4 py-3">
+              <span class="inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold
+                {% if loop.index <= 3 %}bg-red-100 text-red-700
+                {% elif loop.index <= 6 %}bg-amber-100 text-amber-700
+                {% else %}bg-blue-50 text-blue-600{% endif %}">
+                {{ loop.index }}
+              </span>
+            </td>
+            <td class="px-4 py-3">
+              <div class="font-semibold text-gray-800 text-sm">{{ a.product }}</div>
+              <div class="text-xs text-gray-400 font-mono">{{ a.project_id }}</div>
+            </td>
+            <td class="px-4 py-3 text-xs text-gray-600">{{ a.client }}</td>
+            <td class="px-4 py-3 text-xs text-gray-500">{{ a.owner or '—' }}</td>
+            <td class="px-4 py-3 text-right text-xs font-mono font-semibold text-blue-700">
+              Rp {{ "{:,.0f}".format(a.revenue_target) }}
+            </td>
+            <td class="px-4 py-3 text-center">
+              <span class="text-xs px-2 py-0.5 rounded-full
+                {% if a.type=='Termin' %}bg-red-100 text-red-700
+                {% elif a.type=='Tahunan' %}bg-amber-100 text-amber-700
+                {% elif a.type=='Bulanan' %}bg-blue-100 text-blue-700
+                {% else %}bg-gray-100 text-gray-600{% endif %}">{{ a.type }}</span>
+            </td>
+            <td class="px-4 py-3 text-xs">
+              <span class="px-2 py-0.5 rounded-full font-medium
+                {% if a.issue == 'zero' %}bg-red-100 text-red-600
+                {% elif a.issue == 'partial' %}bg-yellow-100 text-yellow-700
+                {% else %}bg-orange-100 text-orange-600{% endif %}">
+                {{ a.issue_label }}
+              </span>
+            </td>
+            <td class="px-4 py-3 text-xs text-gray-600 max-w-xs">{{ a.action }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+{# ── SCORECARD ─────────────────────────────────────────────────────────────── #}
+<section>
+  <div class="bg-slate-900 rounded-2xl p-5 sm:p-6 text-white">
+    <h2 class="font-bold text-base mb-5 flex items-center gap-3">
+      <span>📊</span> Revenue Scorecard — Kondisi Saat Ini
+    </h2>
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      {% for score in scorecard %}
+      <div class="bg-white/5 rounded-xl p-4 border border-white/10">
+        <div class="text-xs text-slate-400 mb-2 leading-tight">{{ score.label }}</div>
+        <div class="text-2xl font-black mb-1 {{ score.color }}">{{ score.value }}</div>
+        <div class="flex items-center gap-1.5">
+          <span class="text-base">{{ score.icon }}</span>
+          <span class="text-xs {{ score.color }} font-medium leading-tight">{{ score.status }}</span>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    <div class="mt-4 border-t border-white/10 pt-3 text-xs text-slate-400 text-center">
+      Data real-time dari database · Diperbarui setiap kali halaman dimuat
+    </div>
+  </div>
+</section>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const monthlyData = {{ monthly_data | tojson }};
+const labels = monthlyData.map(d => d.month_name.slice(0,3));
+const targets = monthlyData.map(d => +(d.target/1e9).toFixed(2));
+const actuals = monthlyData.map((d, i) => i < 6 ? +(d.actual/1e9).toFixed(2) : null);
+const zeroActuals = monthlyData.map((d, i) => i >= 6 ? +(d.target/1e9).toFixed(2) : null);
+
+new Chart(document.getElementById('trendChart'), {
+  data: {
+    labels,
+    datasets: [
+      {
+        type: 'bar', label: 'Target',
+        data: targets,
+        backgroundColor: '#e2e8f0',
+        borderRadius: 4,
+      },
+      {
+        type: 'bar', label: 'Actual (Jan–Jun)',
+        data: actuals,
+        backgroundColor: '#3b82f6',
+        borderRadius: 4,
+      },
+      {
+        type: 'bar', label: 'Jul–Des (nol/belum input)',
+        data: zeroActuals,
+        backgroundColor: 'rgba(239,68,68,0.25)',
+        borderRadius: 4,
+        borderColor: '#ef4444',
+        borderWidth: 1,
+      }
+    ]
+  },
+  options: {
+    plugins: {
+      legend: { position: 'top', labels: { font: { size: 10 }, boxWidth: 12 } }
+    },
+    scales: {
+      y: {
+        beginAtZero: true,
+        stacked: false,
+        ticks: { callback: v => 'Rp' + v.toFixed(1) + 'M', font: { size: 10 } }
+      },
+      x: { ticks: { font: { size: 10 } } }
+    },
+    responsive: true
+  }
+});
+</script>
+{% endblock %}

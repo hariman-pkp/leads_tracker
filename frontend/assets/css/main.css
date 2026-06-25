@@ -1,0 +1,154 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Theme CSS Variables ───────────────────────────────────────────────────── */
+:root {
+  /* Dark theme (default) */
+  --apex-bg:        #0d1b31;
+  --apex-surface:   #132847;
+  --apex-card:      #1e3a5f;
+  --apex-border:    #1e3a5f;
+  --apex-border-2:  #2d4a6e;
+  --apex-text:      #f1f5f9;
+  --apex-text-muted:#94a3b8;
+  --apex-text-faint:#64748b;
+  --apex-input-bg:  #1e3a5f;
+  --apex-hover:     rgba(30,58,95,0.6);
+  --apex-scrollbar: #2d4a6e;
+}
+
+html.light {
+  /* Light theme — strong borders & dark text */
+  --apex-bg:        #dde3ec;
+  --apex-surface:   #edf1f7;
+  --apex-card:      #e4eaf2;
+  --apex-border:    #5a6a82;
+  --apex-border-2:  #3d4f66;
+  --apex-text:      #0d1520;
+  --apex-text-muted:#253040;
+  --apex-text-faint:#3d4f66;
+  --apex-input-bg:  #d4dbe7;
+  --apex-hover:     rgba(90,106,130,0.15);
+  --apex-scrollbar: #5a6a82;
+}
+
+@layer base {
+  html { color: var(--apex-text); }
+  body { background-color: var(--apex-bg); @apply font-sans antialiased; transition: background-color 0.2s, color 0.2s; }
+}
+
+@layer components {
+  /* Cards */
+  .card {
+    background-color: var(--apex-surface);
+    border: 1px solid var(--apex-border);
+    @apply rounded-xl p-5 shadow-lg;
+  }
+  .card-sm {
+    background-color: var(--apex-surface);
+    border: 1px solid var(--apex-border);
+    @apply rounded-lg p-4 shadow;
+  }
+
+  /* Stat cards */
+  .stat-card { @apply card flex items-center gap-4; }
+  .stat-icon    { @apply w-12 h-12 rounded-xl flex items-center justify-center text-xl flex-shrink-0; }
+  .stat-value   { color: var(--apex-text); @apply text-2xl font-bold leading-none; }
+  .stat-label   { color: var(--apex-text-muted); @apply text-xs mt-1; }
+
+  /* Badges */
+  .badge        { @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium; }
+  .badge-blue   { @apply badge bg-blue-900/50 text-blue-300 border border-blue-700/50; }
+  .badge-green  { @apply badge bg-green-900/50 text-green-300 border border-green-700/50; }
+  .badge-yellow { @apply badge bg-yellow-900/50 text-yellow-300 border border-yellow-700/50; }
+  .badge-red    { @apply badge bg-red-900/50 text-red-300 border border-red-700/50; }
+  .badge-gray   { @apply badge bg-gray-800 text-gray-300 border border-gray-700; }
+  .badge-purple { @apply badge bg-purple-900/50 text-purple-300 border border-purple-700/50; }
+
+  /* Buttons */
+  .btn          { @apply inline-flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-all duration-150 cursor-pointer; }
+  .btn:disabled { @apply opacity-50 cursor-not-allowed; }
+  .btn-primary  { @apply btn bg-primary-600 text-white shadow; }
+  .btn-secondary {
+    background-color: var(--apex-card);
+    border: 1px solid var(--apex-border-2);
+    color: var(--apex-text-muted);
+    @apply btn;
+  }
+  .btn-danger   { @apply btn bg-red-600 text-white; }
+  .btn-ghost    { color: var(--apex-text-muted); @apply btn; }
+  .btn-sm       { @apply px-3 py-1.5 text-xs; }
+  .btn-xs       { @apply px-2 py-1 text-xs; }
+
+  /* Tables */
+  .tbl         { @apply w-full text-sm text-left border-collapse; }
+  .tbl thead   { color: var(--apex-text-muted); border-bottom: 1px solid var(--apex-border); @apply text-xs uppercase; }
+  .tbl th      { @apply px-4 py-3 font-medium; }
+  .tbl td      { border-bottom: 1px solid color-mix(in srgb, var(--apex-border) 50%, transparent); @apply px-4 py-3; }
+
+  /* Forms */
+  .form-label  { color: var(--apex-text-muted); @apply block text-xs font-medium mb-1.5 uppercase tracking-wider; }
+  .form-input  {
+    background-color: var(--apex-input-bg);
+    border: 1px solid var(--apex-border-2);
+    color: var(--apex-text);
+    @apply w-full rounded-lg px-3 py-2 text-sm transition-colors;
+  }
+  .form-input::placeholder { color: var(--apex-text-faint); }
+  .form-select  { @apply form-input appearance-none cursor-pointer; }
+  .form-textarea{ @apply form-input resize-none; }
+
+  /* Progress bars */
+  .progress-bar  { background-color: var(--apex-card); @apply w-full rounded-full h-2 overflow-hidden; }
+  .progress-fill { @apply h-full rounded-full transition-all duration-500; }
+
+  /* Sidebar nav */
+  .nav-group-label { color: var(--apex-text-faint); @apply px-3 py-1.5 text-xs font-semibold uppercase tracking-widest; }
+  .nav-item        { color: var(--apex-text-muted); @apply flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all cursor-pointer; }
+  .nav-item.active { @apply bg-primary-600/20 text-primary-400 border-l-2 border-primary-500; }
+
+  /* Page header */
+  .page-header   { @apply flex items-center justify-between mb-6; }
+  .page-title    { color: var(--apex-text); @apply text-xl font-bold; }
+  .page-subtitle { color: var(--apex-text-muted); @apply text-sm mt-0.5; }
+
+  /* Empty state */
+  .empty-state { color: var(--apex-text-faint); @apply flex flex-col items-center justify-center py-16; }
+  .empty-icon  { @apply text-5xl mb-3 opacity-40; }
+  .empty-text  { @apply text-sm; }
+
+  .hint          { color: var(--apex-text-faint); @apply text-xs; }
+  .section-title { color: var(--apex-text-muted); @apply text-xs font-semibold uppercase tracking-widest mb-3; }
+}
+
+/* Hover states */
+.btn-primary:hover:not(:disabled)   { background-color: #3b82f6; }
+.btn-secondary:hover:not(:disabled) { background-color: var(--apex-hover); }
+.btn-danger:hover:not(:disabled)    { background-color: #dc2626; }
+.btn-ghost:hover:not(:disabled)     { background-color: var(--apex-hover); }
+.nav-item:hover                     { background-color: var(--apex-hover); color: var(--apex-text); }
+.tbl tbody tr:hover                 { background-color: var(--apex-hover); }
+.form-input:focus, .form-select:focus, .form-textarea:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59,130,246,0.25);
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar        { width: 5px; height: 5px; }
+::-webkit-scrollbar-track  { background: var(--apex-bg); }
+::-webkit-scrollbar-thumb  { background: var(--apex-scrollbar); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #3b82f6; }
+
+/* Page transitions */
+.page-enter-active, .page-leave-active { transition: opacity 0.15s ease; }
+.page-enter-from, .page-leave-to       { opacity: 0; }
+
+/* Light mode badge overrides — badges designed for dark bg, adjust for light */
+html.light .badge-blue   { @apply bg-blue-100 text-blue-700 border-blue-200; }
+html.light .badge-green  { @apply bg-green-100 text-green-700 border-green-200; }
+html.light .badge-yellow { @apply bg-yellow-100 text-yellow-700 border-yellow-200; }
+html.light .badge-red    { @apply bg-red-100 text-red-700 border-red-200; }
+html.light .badge-gray   { @apply bg-gray-100 text-gray-600 border-gray-200; }
+html.light .badge-purple { @apply bg-purple-100 text-purple-700 border-purple-200; }

@@ -1,0 +1,229 @@
+{% extends "base.html" %}
+{% block title %}Master Users{% endblock %}
+{% block page_title %}Master Users & Hak Akses{% endblock %}
+
+{% block content %}
+<div class="space-y-5" x-data="{ showForm: false, resetUid: null }">
+
+    <!-- Tambah User -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+        <div class="px-5 py-4 flex items-center justify-between bg-gray-50 border-b border-gray-100">
+            <div>
+                <h2 class="font-semibold text-sm text-gray-700"><i class="fas fa-user-cog text-blue-500 mr-2"></i>Daftar User</h2>
+                <p class="text-xs text-gray-400 mt-0.5">{{ users|length }} user terdaftar</p>
+            </div>
+            <button @click="showForm = !showForm"
+                class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700 transition flex items-center gap-2">
+                <i class="fas fa-user-plus"></i> Tambah User
+            </button>
+        </div>
+
+        <div x-show="showForm" x-cloak class="p-5 border-b border-gray-100 bg-blue-50">
+            <form method="post" action="/users/new" class="grid grid-cols-1 md:grid-cols-5 gap-3 items-end">
+                <div class="md:col-span-1">
+                    <label class="text-xs text-gray-500 mb-1 block">Nama <span class="text-red-400">*</span></label>
+                    <input name="nama" required placeholder="Nama lengkap"
+                        class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+                </div>
+                <div class="md:col-span-1">
+                    <label class="text-xs text-gray-500 mb-1 block">Email <span class="text-red-400">*</span></label>
+                    <input type="email" name="email" required placeholder="email@pkp.co.id"
+                        class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+                </div>
+                <div>
+                    <label class="text-xs text-gray-500 mb-1 block">Role <span class="text-red-400">*</span></label>
+                    <select name="role_id" required class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+                        <option value="">— Pilih Role —</option>
+                        {% for r in roles %}
+                        <option value="{{ r.id }}">{{ r.nama }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label class="text-xs text-gray-500 mb-1 block">Password Awal</label>
+                    <input type="password" name="password" value="pkp2026" placeholder="Min. 6 karakter"
+                        class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+                </div>
+                <div class="flex gap-2">
+                    <button type="submit" class="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700 font-medium">
+                        <i class="fas fa-save mr-1"></i>Simpan
+                    </button>
+                    <button type="button" @click="showForm=false" class="px-3 py-2 text-gray-400 hover:text-gray-600">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- User Table -->
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead class="bg-gray-50 text-gray-500 text-xs uppercase border-b border-gray-100">
+                    <tr>
+                        <th class="px-5 py-3 text-left">#</th>
+                        <th class="px-5 py-3 text-left">Nama</th>
+                        <th class="px-5 py-3 text-left">Email</th>
+                        <th class="px-5 py-3 text-left">Role</th>
+                        <th class="px-5 py-3 text-left">Menu Akses</th>
+                        <th class="px-5 py-3 text-center">Status</th>
+                        <th class="px-5 py-3 text-left">Terdaftar</th>
+                        <th class="px-5 py-3 text-center">Aksi</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-50">
+                    {% for u in users %}
+                    <tr class="hover:bg-gray-50" x-data="{ editing: false }">
+
+                        <td class="px-5 py-3 text-gray-400 text-xs">{{ u.id }}</td>
+
+                        <!-- View mode -->
+                        <td class="px-5 py-3" x-show="!editing">
+                            <div class="flex items-center gap-2.5">
+                                <div class="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0
+                                    {% if u.role_nama == 'Admin' %}bg-purple-600
+                                    {% elif u.role_nama == 'Manager' %}bg-blue-600
+                                    {% else %}bg-slate-500{% endif %}">
+                                    {{ u.nama[0]|upper }}
+                                </div>
+                                <div>
+                                    <div class="font-medium text-gray-800">{{ u.nama }}</div>
+                                    {% if u.id == current_user.id %}
+                                    <span class="text-xs text-blue-500 font-medium">Anda</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </td>
+                        <td class="px-5 py-3 text-gray-500 text-xs" x-show="!editing">{{ u.email or '—' }}</td>
+                        <td class="px-5 py-3" x-show="!editing">
+                            <span class="px-2 py-0.5 rounded-full text-xs font-semibold
+                                {% if u.role_nama == 'Admin' %}bg-purple-100 text-purple-700
+                                {% elif u.role_nama == 'Manager' %}bg-blue-100 text-blue-700
+                                {% else %}bg-gray-100 text-gray-600{% endif %}">
+                                {{ u.role_nama or '—' }}
+                            </span>
+                        </td>
+                        <td class="px-5 py-3 text-xs text-gray-500" x-show="!editing">
+                            <a href="/roles" class="text-blue-500 hover:underline">
+                                <i class="fas fa-external-link-alt mr-1 text-xs"></i>Lihat di Role
+                            </a>
+                        </td>
+                        <td class="px-5 py-3 text-center" x-show="!editing">
+                            {% if u.is_active %}
+                            <span class="bg-green-100 text-green-700 text-xs px-2 py-0.5 rounded-full font-medium">Aktif</span>
+                            {% else %}
+                            <span class="bg-red-100 text-red-600 text-xs px-2 py-0.5 rounded-full font-medium">Nonaktif</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-5 py-3 text-xs text-gray-400" x-show="!editing">{{ u.created_at[:10] if u.created_at else '—' }}</td>
+
+                        <!-- Edit mode -->
+                        <td colspan="6" class="px-5 py-3" x-show="editing" x-cloak>
+                            <form method="post" action="/users/{{ u.id }}/edit"
+                                class="flex flex-wrap gap-2 items-end">
+                                <div>
+                                    <label class="text-xs text-gray-400 mb-0.5 block">Nama</label>
+                                    <input name="nama" value="{{ u.nama }}" required
+                                        class="border border-gray-200 rounded-lg px-3 py-1.5 text-sm w-36 focus:outline-none focus:ring-2 focus:ring-blue-400">
+                                </div>
+                                <div>
+                                    <label class="text-xs text-gray-400 mb-0.5 block">Email</label>
+                                    <input type="email" name="email" value="{{ u.email or '' }}"
+                                        class="border border-gray-200 rounded-lg px-3 py-1.5 text-sm w-48 focus:outline-none focus:ring-2 focus:ring-blue-400">
+                                </div>
+                                <div>
+                                    <label class="text-xs text-gray-400 mb-0.5 block">Role</label>
+                                    <select name="role_id" class="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+                                        {% for r in roles %}
+                                        <option value="{{ r.id }}" {% if r.id == u.role_id %}selected{% endif %}>{{ r.nama }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="text-xs text-gray-400 mb-0.5 block">Status</label>
+                                    <select name="is_active" class="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+                                        <option value="1" {% if u.is_active %}selected{% endif %}>Aktif</option>
+                                        <option value="0" {% if not u.is_active %}selected{% endif %}>Nonaktif</option>
+                                    </select>
+                                </div>
+                                <button type="submit" class="bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs hover:bg-green-700 font-medium">
+                                    <i class="fas fa-check mr-1"></i>Simpan
+                                </button>
+                                <button type="button" @click="editing=false" class="text-gray-400 text-xs px-2 py-1.5 hover:text-gray-600">Batal</button>
+                            </form>
+                        </td>
+
+                        <!-- Action buttons -->
+                        <td class="px-5 py-3 text-center" x-show="!editing">
+                            <div class="flex items-center justify-center gap-1.5">
+                                <button @click="editing = true"
+                                    class="text-blue-500 hover:text-blue-700 p-1.5 hover:bg-blue-50 rounded transition"
+                                    title="Edit user">
+                                    <i class="fas fa-edit text-xs"></i>
+                                </button>
+                                <button @click="resetUid = {{ u.id }}; $dispatch('open-reset')"
+                                    class="text-amber-500 hover:text-amber-700 p-1.5 hover:bg-amber-50 rounded transition"
+                                    title="Reset password">
+                                    <i class="fas fa-key text-xs"></i>
+                                </button>
+                                {% if u.id != current_user.id %}
+                                <form method="post" action="/users/{{ u.id }}/delete" class="inline"
+                                    onsubmit="return confirm('Hapus user {{ u.nama }}?')">
+                                    <button type="submit"
+                                        class="text-red-400 hover:text-red-600 p-1.5 hover:bg-red-50 rounded transition"
+                                        title="Hapus user">
+                                        <i class="fas fa-trash-alt text-xs"></i>
+                                    </button>
+                                </form>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="8" class="px-5 py-10 text-center text-gray-400">
+                            <i class="fas fa-users text-3xl mb-2 block text-gray-200"></i>
+                            Belum ada user.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Reset Password Modal -->
+    <div x-on:open-reset.window="$el.classList.remove('hidden')"
+         class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+            <h3 class="font-bold text-gray-800 mb-1"><i class="fas fa-key text-amber-500 mr-2"></i>Reset Password</h3>
+            <p class="text-sm text-gray-500 mb-4">Masukkan password baru untuk user ini.</p>
+            <form method="post" :action="'/users/' + resetUid + '/reset-password'" class="space-y-3">
+                <div>
+                    <label class="text-xs text-gray-500 mb-1 block">Password Baru</label>
+                    <input type="password" name="new_password" required minlength="6" placeholder="Min. 6 karakter"
+                        class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400">
+                </div>
+                <div class="flex gap-2 pt-1">
+                    <button type="submit" class="flex-1 bg-amber-500 text-white py-2 rounded-lg text-sm font-medium hover:bg-amber-600">
+                        Reset Password
+                    </button>
+                    <button type="button" @click="$el.closest('.fixed').classList.add('hidden')"
+                        class="flex-1 bg-gray-100 text-gray-600 py-2 rounded-lg text-sm hover:bg-gray-200">
+                        Batal
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Info -->
+    <div class="bg-blue-50 rounded-xl border border-blue-100 p-4 text-sm text-blue-700 flex items-start gap-3">
+        <i class="fas fa-info-circle mt-0.5 flex-shrink-0"></i>
+        <div>
+            <strong>Catatan:</strong> Hak akses menu ditentukan oleh <strong>Role</strong> yang ditetapkan ke user.
+            Untuk mengubah menu yang bisa diakses, ubah konfigurasi role di halaman
+            <a href="/roles" class="underline font-semibold">Role & Menu</a>.
+        </div>
+    </div>
+</div>
+{% endblock %}

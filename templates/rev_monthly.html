@@ -1,0 +1,210 @@
+{% extends "base.html" %}
+{% block title %}Monthly Monitoring{% endblock %}
+{% block page_title %}Monthly Revenue Monitoring{% endblock %}
+
+{% block content %}
+{# ── Period selector: Tahun + Bulan ────────────────────────────────────────── #}
+<div class="bg-white rounded-xl border border-gray-100 shadow-sm p-3 mb-4">
+  <form method="get" class="flex flex-wrap gap-2 items-center">
+    <select name="tahun" onchange="this.form.submit()"
+      class="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400">
+      {% for y in years %}<option value="{{ y }}" {% if cur_year == y %}selected{% endif %}>{{ y }}</option>{% endfor %}
+    </select>
+    <select name="owner" onchange="this.form.submit()"
+      class="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400">
+      <option value="">Semua Owner</option>
+      {% for o in owners %}<option value="{{ o }}" {% if filter_owner == o %}selected{% endif %}>{{ o }}</option>{% endfor %}
+    </select>
+    <select name="kategori" onchange="this.form.submit()"
+      class="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400">
+      <option value="">Semua Kategori</option>
+      <option value="Recurring" {% if filter_kategori=='Recurring' %}selected{% endif %}>Recurring</option>
+      <option value="Project" {% if filter_kategori=='Project' %}selected{% endif %}>Project</option>
+    </select>
+    <input type="hidden" name="month" value="{{ cur_month }}">
+    <span class="text-xs text-gray-400">{{ rows|length }} proyek</span>
+  </form>
+</div>
+
+{# ── Month tabs ────────────────────────────────────────────────────────────── #}
+<div class="flex items-center gap-1.5 mb-4 overflow-x-auto pb-1">
+  {% for mnum, mname in months %}
+  <a href="/revenue/monthly?month={{ mnum }}&tahun={{ cur_year }}{% if filter_owner %}&owner={{ filter_owner }}{% endif %}{% if filter_kategori %}&kategori={{ filter_kategori }}{% endif %}"
+     class="flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition-all
+            {% if mnum == cur_month %}bg-blue-600 text-white shadow-md{% else %}bg-white border border-gray-200 text-gray-500 hover:border-blue-300 hover:text-blue-600{% endif %}">
+    {{ mname[:3] }}
+  </a>
+  {% endfor %}
+</div>
+
+{# ── Month KPI ─────────────────────────────────────────────────────────────── #}
+{% set mach = (month_actual / month_target * 100)|round(1) if month_target else 0 %}
+<div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+  <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
+    <div class="text-xs text-gray-400 mb-1">Target {{ month_name }}</div>
+    <div class="text-lg sm:text-xl font-black text-gray-800">Rp {{ "{:,.0f}".format(month_target/1e9) }}M</div>
+  </div>
+  <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
+    <div class="text-xs text-gray-400 mb-1">
+      Actual {{ month_name }}
+      <span class="text-blue-400 ml-1" title="Dari Invoice"><i class="fas fa-file-invoice"></i></span>
+    </div>
+    <div class="text-lg sm:text-xl font-black text-blue-700">Rp {{ "{:,.0f}".format(month_actual/1e9) }}M</div>
+  </div>
+  <div class="rounded-xl border p-4
+    {% if mach >= 80 %}bg-green-50 border-green-200{% elif mach >= 50 %}bg-yellow-50 border-yellow-200{% else %}bg-red-50 border-red-200{% endif %}">
+    <div class="text-xs {% if mach >= 80 %}text-green-500{% elif mach >= 50 %}text-yellow-500{% else %}text-red-400{% endif %} mb-1">Achievement</div>
+    <div class="text-lg sm:text-xl font-black {% if mach >= 80 %}text-green-700{% elif mach >= 50 %}text-yellow-700{% else %}text-red-700{% endif %}">
+      {{ mach }}%
+    </div>
+  </div>
+  <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
+    <div class="text-xs text-gray-400 mb-1">Gap</div>
+    <div class="text-lg sm:text-xl font-black {% if month_target - month_actual > 0 %}text-red-600{% else %}text-green-600{% endif %}">
+      Rp {{ "{:,.0f}".format((month_target - month_actual)|abs / 1e9) }}M
+    </div>
+    <a href="/revenue/invoice?tahun={{ cur_year }}&period={{ month_name }}" class="text-xs text-blue-500 hover:underline mt-1 block">
+      <i class="fas fa-file-invoice mr-1"></i>Lihat Invoice {{ month_name[:3] }}
+    </a>
+  </div>
+</div>
+
+{# Info banner #}
+<div class="bg-blue-50 border border-blue-200 rounded-xl px-4 py-2 mb-4 text-xs text-blue-700 flex items-center gap-2">
+  <i class="fas fa-info-circle"></i>
+  <span>Actual diambil dari total <em>Paid Amount</em> invoice bulan <strong>{{ month_name }}</strong> {{ cur_year }}.
+    Untuk update data, tambah invoice di
+    <a href="/revenue/invoice?tahun={{ cur_year }}" class="underline font-semibold">Invoice &amp; Payment</a>.</span>
+</div>
+
+{# ── MOBILE: Card list ─────────────────────────────────────────────────────── #}
+<div class="lg:hidden space-y-2">
+  {% for row in rows %}
+  {% set pct = (row.actual / row.target * 100)|round(1) if row.target else 0 %}
+  <div class="bg-white rounded-xl border {% if row.actual >= row.target and row.target > 0 %}border-green-200{% elif pct >= 50 %}border-yellow-200{% else %}border-red-200{% endif %} shadow-sm p-4">
+    <div class="flex items-start justify-between gap-2 mb-2">
+      <div>
+        <div class="font-semibold text-sm text-gray-800">{{ row.product }}</div>
+        <div class="text-xs text-gray-400">{{ row.client }} · {{ row.owner }}</div>
+        <span class="text-xs px-1.5 py-0.5 rounded-full {% if row.kategori=='Recurring' %}bg-blue-100 text-blue-700{% else %}bg-purple-100 text-purple-700{% endif %}">
+          {{ row.kategori }}
+        </span>
+      </div>
+      <span class="text-xs px-2 py-0.5 rounded-full font-semibold flex-shrink-0
+        {% if row.actual >= row.target and row.target > 0 %}bg-green-100 text-green-700
+        {% elif pct >= 50 %}bg-yellow-100 text-yellow-700
+        {% else %}bg-red-100 text-red-700{% endif %}">
+        {{ pct }}%
+      </span>
+    </div>
+    <div class="grid grid-cols-3 gap-2 text-center text-xs mb-2">
+      <div><div class="text-gray-400">Target</div><div class="font-semibold">{{ "{:,.0f}".format(row.target/1e6) }}Jt</div></div>
+      <div class="border-x border-gray-100">
+        <div class="text-gray-400">Actual <i class="fas fa-file-invoice text-blue-300"></i></div>
+        <div class="font-semibold {% if row.actual >= row.target and row.target > 0 %}text-green-600{% else %}text-blue-600{% endif %}">
+          {{ "{:,.0f}".format(row.actual/1e6) }}Jt
+        </div>
+      </div>
+      <div><div class="text-gray-400">Gap</div>
+        <div class="font-semibold {% if row.target - row.actual > 0 %}text-red-500{% else %}text-green-600{% endif %}">
+          {{ "{:,.0f}".format((row.target - row.actual)/1e6) }}Jt
+        </div>
+      </div>
+    </div>
+    <div class="bg-gray-100 rounded-full h-1.5">
+      <div class="h-1.5 rounded-full {% if pct>=100 %}bg-green-500{% elif pct>=80 %}bg-yellow-500{% else %}bg-red-400{% endif %}"
+           style="width: {{ [pct,100]|min }}%"></div>
+    </div>
+    <div class="mt-1.5 text-right">
+      <a href="/revenue/invoice?project_id={{ row.project_id }}&tahun={{ cur_year }}"
+         class="text-xs text-blue-500 hover:underline">
+        <i class="fas fa-file-invoice mr-1"></i>Invoice
+      </a>
+    </div>
+  </div>
+  {% else %}
+  <div class="bg-white rounded-xl border border-gray-100 p-10 text-center text-gray-400 text-sm">
+    Tidak ada data untuk bulan {{ month_name }} {{ cur_year }}
+  </div>
+  {% endfor %}
+</div>
+
+{# ── DESKTOP: Table ────────────────────────────────────────────────────────── #}
+<div class="hidden lg:block bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+  <table class="w-full text-sm">
+    <thead class="bg-gray-50 text-gray-400 text-xs uppercase border-b border-gray-100">
+      <tr>
+        <th class="px-4 py-3 text-left">Project ID</th>
+        <th class="px-4 py-3 text-left">Produk</th>
+        <th class="px-4 py-3 text-left">Client</th>
+        <th class="px-4 py-3 text-left">Owner</th>
+        <th class="px-4 py-3 text-left">Kategori</th>
+        <th class="px-4 py-3 text-right">Target {{ month_name }}</th>
+        <th class="px-4 py-3 text-right">
+          Actual <span class="text-blue-400" title="Dari Invoice"><i class="fas fa-file-invoice"></i></span>
+        </th>
+        <th class="px-4 py-3 text-center">Achievement</th>
+        <th class="px-4 py-3 text-center">Invoice</th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-gray-50">
+      {% for row in rows %}
+      {% set pct = (row.actual / row.target * 100)|round(1) if row.target else 0 %}
+      <tr class="{% if row.actual >= row.target and row.target > 0 %}hover:bg-green-50{% elif pct >= 50 %}hover:bg-yellow-50{% else %}hover:bg-red-50{% endif %} hover:bg-gray-50 transition-colors">
+        <td class="px-4 py-2.5 font-mono text-xs text-gray-400">{{ row.project_id }}</td>
+        <td class="px-4 py-2.5 font-medium text-gray-800 max-w-[160px] truncate">{{ row.product }}</td>
+        <td class="px-4 py-2.5 text-xs text-gray-600">{{ row.client }}</td>
+        <td class="px-4 py-2.5 text-xs text-gray-500">{{ row.owner or '—' }}</td>
+        <td class="px-4 py-2.5">
+          <span class="text-xs px-2 py-0.5 rounded-full {% if row.kategori=='Recurring' %}bg-blue-100 text-blue-700{% else %}bg-purple-100 text-purple-700{% endif %}">
+            {{ row.kategori }}
+          </span>
+        </td>
+        <td class="px-4 py-2.5 text-right text-xs font-mono text-gray-600">{{ "{:,.0f}".format(row.target) }}</td>
+        <td class="px-4 py-2.5 text-right text-xs font-mono font-semibold
+          {% if row.actual >= row.target and row.target > 0 %}text-green-700{% else %}text-blue-700{% endif %}">
+          {{ "{:,.0f}".format(row.actual) }}
+        </td>
+        <td class="px-4 py-2.5 text-center">
+          <div class="flex items-center gap-1.5 justify-center">
+            <div class="w-16 bg-gray-200 rounded-full h-1.5">
+              <div class="h-1.5 rounded-full {% if pct>=100 %}bg-green-500{% elif pct>=80 %}bg-yellow-500{% else %}bg-red-400{% endif %}"
+                   style="width: {{ [pct,100]|min }}%"></div>
+            </div>
+            <span class="text-xs font-semibold {% if pct>=100 %}text-green-700{% elif pct>=80 %}text-yellow-600{% else %}text-red-600{% endif %}">
+              {{ pct }}%
+            </span>
+          </div>
+        </td>
+        <td class="px-4 py-2.5 text-center">
+          <a href="/revenue/invoice?project_id={{ row.project_id }}&tahun={{ cur_year }}"
+             class="text-xs text-blue-500 hover:text-blue-700 px-2 py-1 hover:bg-blue-50 rounded transition">
+            <i class="fas fa-file-invoice"></i>
+          </a>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="9" class="px-5 py-10 text-center text-gray-400">
+        Tidak ada data untuk bulan {{ month_name }} {{ cur_year }}
+      </td></tr>
+      {% endfor %}
+      {# Total row #}
+      {% if rows %}
+      <tr class="bg-slate-800 text-white font-bold text-sm">
+        <td colspan="5" class="px-4 py-3">TOTAL {{ month_name }} {{ cur_year }}</td>
+        <td class="px-4 py-3 text-right font-mono">{{ "{:,.0f}".format(month_target) }}</td>
+        <td class="px-4 py-3 text-right font-mono">{{ "{:,.0f}".format(month_actual) }}</td>
+        <td class="px-4 py-3 text-center">
+          <span class="{% if mach>=80 %}text-green-400{% elif mach>=50 %}text-yellow-400{% else %}text-red-400{% endif %}">
+            {{ mach }}%
+          </span>
+        </td>
+        <td class="px-4 py-3 text-center text-xs text-slate-400">
+          Gap: Rp {{ "{:,.0f}".format(month_target - month_actual) }}
+        </td>
+      </tr>
+      {% endif %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

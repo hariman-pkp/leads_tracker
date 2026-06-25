@@ -1,0 +1,263 @@
+{% extends "base.html" %}
+{% block title %}Invoice & Payment{% endblock %}
+{% block page_title %}Invoice & Payment Tracker{% endblock %}
+
+{% block content %}
+{# KPI strip #}
+{% set outstanding = total_invoice - total_paid %}
+<div class="grid grid-cols-3 gap-3 mb-4">
+  <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
+    <div class="text-xs text-gray-400 mb-1">Total Invoice {{ cur_year }}</div>
+    <div class="text-lg font-black text-gray-800">Rp {{ "{:,.0f}".format(total_invoice/1e9) }}M</div>
+    <div class="text-xs text-gray-400 mt-1">{{ invoices|length }} invoice</div>
+  </div>
+  <div class="bg-green-50 rounded-xl border border-green-200 shadow-sm p-4">
+    <div class="text-xs text-green-500 mb-1">Total Terbayar</div>
+    <div class="text-lg font-black text-green-700">Rp {{ "{:,.0f}".format(total_paid/1e9) }}M</div>
+    <div class="text-xs text-green-500 mt-1">{{ (total_paid/total_invoice*100)|round(1) if total_invoice else 0 }}% dari total</div>
+  </div>
+  <div class="bg-red-50 rounded-xl border border-red-200 shadow-sm p-4">
+    <div class="text-xs text-red-400 mb-1">Outstanding</div>
+    <div class="text-lg font-black text-red-700">Rp {{ "{:,.0f}".format(outstanding/1e9) }}M</div>
+    <div class="text-xs text-red-400 mt-1">Belum/partial bayar</div>
+  </div>
+</div>
+
+{# Filter + Add #}
+<div class="bg-white rounded-xl border border-gray-100 shadow-sm p-3 mb-4" x-data="{ showForm: false }">
+  <div class="flex flex-wrap gap-2 items-center mb-2">
+    <form method="get" class="flex flex-wrap gap-2 flex-1 items-center">
+      <div class="relative flex-1 min-w-[140px]">
+        <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-300 text-xs pointer-events-none"></i>
+        <input name="search" value="{{ search }}" placeholder="Cari client, produk, no invoice..."
+          class="w-full border border-gray-200 rounded-lg pl-8 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+      </div>
+      {# Filter Tahun #}
+      <select name="tahun" class="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400">
+        {% for y in years %}<option value="{{ y }}" {% if cur_year == y %}selected{% endif %}>{{ y }}</option>{% endfor %}
+      </select>
+      {# Filter Bulan #}
+      <select name="period" class="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400">
+        <option value="">Semua Bulan</option>
+        {% for p in ['January','February','March','April','May','June','July','August','September','October','November','December'] %}
+        <option value="{{ p }}" {% if filter_period == p %}selected{% endif %}>{{ p }}</option>{% endfor %}
+      </select>
+      <select name="status" class="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400">
+        <option value="">Semua Status</option>
+        <option value="Lunas" {% if filter_status=='Lunas' %}selected{% endif %}>✅ Lunas</option>
+        <option value="Belum" {% if filter_status=='Belum' %}selected{% endif %}>⏳ Belum Bayar</option>
+      </select>
+      {# Filter Project #}
+      <select name="project_id" class="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400 max-w-[200px]">
+        <option value="">Semua Project</option>
+        {% for rp in rev_projects %}
+        <option value="{{ rp.project_id }}" {% if filter_project == rp.project_id %}selected{% endif %}>
+          {{ rp.project_id }} – {{ rp.product|truncate(20, true) }}
+        </option>{% endfor %}
+      </select>
+      <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700 transition font-medium">Filter</button>
+      {% if search or filter_period or filter_status or filter_project %}
+      <a href="/revenue/invoice?tahun={{ cur_year }}" class="text-gray-400 hover:text-gray-600 text-sm px-2 py-2">Reset</a>{% endif %}
+    </form>
+    <button @click="showForm=!showForm"
+      class="flex items-center gap-1.5 bg-green-600 text-white px-3 py-2 rounded-lg text-sm font-medium hover:bg-green-700 transition">
+      <i class="fas fa-plus"></i><span class="hidden sm:inline">Tambah Invoice</span>
+    </button>
+  </div>
+
+  <div x-show="showForm" x-cloak class="border-t border-gray-100 pt-3 mt-2">
+    <p class="text-xs text-blue-600 mb-2 flex items-center gap-1">
+      <i class="fas fa-info-circle"></i>
+      Pilih <strong>Revenue Project</strong> terlebih dahulu — data client & produk akan terisi otomatis.
+    </p>
+    <form method="post" action="/revenue/invoice/new" class="grid grid-cols-2 sm:grid-cols-4 gap-3" id="invoiceForm">
+      <input type="hidden" name="tahun" value="{{ cur_year }}">
+      {# Project selector — wajib #}
+      <div class="col-span-2 sm:col-span-4">
+        <label class="text-xs text-gray-500 mb-1 block">Revenue Project <span class="text-red-400">*</span></label>
+        <select name="project_id" required id="inv_project_id" onchange="fillFromProject(this)"
+          class="w-full border border-blue-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400">
+          <option value="">— Pilih Revenue Project —</option>
+          {% for rp in rev_projects %}
+          <option value="{{ rp.project_id }}" data-client="{{ rp.client }}" data-product="{{ rp.product }}" data-owner="{{ rp.owner }}">
+            {{ rp.project_id }} – {{ rp.client }} / {{ rp.product }}
+          </option>{% endfor %}
+        </select>
+      </div>
+      <div><label class="text-xs text-gray-500 mb-1 block">Client</label>
+        <input name="client" id="inv_client" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"></div>
+      <div><label class="text-xs text-gray-500 mb-1 block">Produk</label>
+        <input name="product" id="inv_product" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"></div>
+      <div><label class="text-xs text-gray-500 mb-1 block">Owner</label>
+        <input name="owner" id="inv_owner" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"></div>
+      <div><label class="text-xs text-gray-500 mb-1 block">No Invoice</label>
+        <input name="invoice_no" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"></div>
+      <div><label class="text-xs text-gray-500 mb-1 block">Period (Bulan)</label>
+        <select name="period" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400">
+          {% for m in ['January','February','March','April','May','June','July','August','September','October','November','December'] %}
+          <option>{{ m }}</option>{% endfor %}
+        </select></div>
+      <div><label class="text-xs text-gray-500 mb-1 block">Invoice Date</label>
+        <input type="date" name="invoice_date" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"></div>
+      <div><label class="text-xs text-gray-500 mb-1 block">Invoice Amount (Rp) <span class="text-red-400">*</span></label>
+        <input type="number" name="invoice_amount" value="0" required class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"></div>
+      <div><label class="text-xs text-gray-500 mb-1 block">Paid Amount (Rp)</label>
+        <input type="number" name="paid_amount" value="0" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"></div>
+      <div><label class="text-xs text-gray-500 mb-1 block">Paid Date</label>
+        <input type="date" name="paid_date" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"></div>
+      <div class="col-span-2 flex gap-2 mt-1">
+        <button type="submit" class="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700">Simpan Invoice</button>
+        <button type="button" @click="showForm=false" class="text-gray-500 px-4 py-2 text-sm hover:bg-gray-100 rounded-lg">Batal</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{# Invoice list - cards on mobile #}
+<div class="lg:hidden space-y-3">
+  {% for inv in invoices %}
+  <div class="bg-white rounded-xl border {% if inv.display_status=='Lunas' %}border-green-200{% elif inv.display_status=='Partial' %}border-yellow-200{% else %}border-gray-200{% endif %} shadow-sm p-4"
+       x-data="{ payMode: false }">
+    <div class="flex items-start justify-between gap-2 mb-2">
+      <div class="min-w-0">
+        <div class="font-semibold text-sm text-gray-800">{{ inv.product }}</div>
+        <div class="text-xs text-gray-400 truncate">{{ inv.client }}</div>
+        {% if inv.project_id %}
+        <a href="/revenue/tracker?search={{ inv.project_id }}&tahun={{ cur_year }}"
+           class="text-xs font-mono text-blue-400 hover:underline mt-0.5 block">{{ inv.project_id }}</a>
+        {% endif %}
+        {% if inv.invoice_no %}
+        <div class="text-xs font-mono text-gray-400 mt-0.5">{{ inv.invoice_no }}</div>{% endif %}
+      </div>
+      <span class="flex-shrink-0 text-xs px-2 py-0.5 rounded-full font-semibold
+        {% if inv.display_status=='Lunas' %}bg-green-100 text-green-700
+        {% elif inv.display_status=='Partial' %}bg-yellow-100 text-yellow-700
+        {% else %}bg-red-100 text-red-600{% endif %}">
+        {% if inv.display_status=='Lunas' %}✅ Lunas
+        {% elif inv.display_status=='Partial' %}⚡ Partial
+        {% else %}⏳ Belum{% endif %}
+      </span>
+    </div>
+    <div class="grid grid-cols-3 gap-2 text-center text-xs mb-3">
+      <div><div class="text-gray-400">Invoice</div><div class="font-semibold">Rp {{ "{:,.0f}".format(inv.invoice_amount/1e6) }}Jt</div></div>
+      <div class="border-x border-gray-100">
+        <div class="text-gray-400">Terbayar</div>
+        <div class="font-semibold text-green-600">Rp {{ "{:,.0f}".format(inv.paid_amount/1e6) }}Jt</div>
+      </div>
+      <div><div class="text-gray-400">Period</div><div class="font-medium text-gray-600">{{ inv.period or '—' }}</div></div>
+    </div>
+    <div class="flex gap-2 text-xs text-gray-400 mb-2">
+      {% if inv.invoice_date %}<span><i class="fas fa-file-invoice w-3 mr-1"></i>{{ inv.invoice_date }}</span>{% endif %}
+      {% if inv.paid_date %}<span><i class="fas fa-check-circle w-3 mr-1 text-green-500"></i>{{ inv.paid_date }}</span>{% endif %}
+    </div>
+    {% if inv.display_status != 'Lunas' %}
+    <button @click="payMode=!payMode" class="w-full text-xs text-blue-600 font-medium py-1.5 border-t border-gray-50 hover:text-blue-800">
+      <i class="fas fa-money-bill-wave mr-1"></i>Catat Pembayaran
+    </button>
+    <form x-show="payMode" x-cloak method="post" action="/revenue/invoice/{{ inv.id }}/pay" class="mt-2 grid grid-cols-2 gap-2">
+      <div>
+        <label class="text-xs text-gray-400">Paid Amount</label>
+        <input type="number" name="paid_amount" value="{{ inv.invoice_amount|int }}"
+          class="w-full border border-gray-200 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+      </div>
+      <div>
+        <label class="text-xs text-gray-400">Paid Date</label>
+        <input type="date" name="paid_date"
+          class="w-full border border-gray-200 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+      </div>
+      <div class="col-span-2 flex gap-2">
+        <button type="submit" class="flex-1 bg-green-600 text-white py-1.5 rounded text-xs font-medium">Simpan</button>
+        <button type="button" @click="payMode=false" class="px-3 text-gray-400 text-xs">Batal</button>
+      </div>
+    </form>
+    {% endif %}
+  </div>
+  {% else %}
+  <div class="bg-white rounded-xl border border-gray-100 p-10 text-center text-gray-400 text-sm">
+    Tidak ada invoice yang cocok
+  </div>
+  {% endfor %}
+</div>
+
+{# Desktop table #}
+<div class="hidden lg:block bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+  <table class="w-full text-sm">
+    <thead class="bg-gray-50 text-gray-400 text-xs uppercase border-b border-gray-100">
+      <tr>
+        <th class="px-4 py-3 text-left">Project</th>
+        <th class="px-4 py-3 text-left">Client</th>
+        <th class="px-4 py-3 text-left">Produk</th>
+        <th class="px-4 py-3 text-left">No Invoice</th>
+        <th class="px-4 py-3 text-left">Period</th>
+        <th class="px-4 py-3 text-right">Invoice Amt</th>
+        <th class="px-4 py-3 text-right">Paid Amt</th>
+        <th class="px-4 py-3 text-left">Invoice Date</th>
+        <th class="px-4 py-3 text-left">Paid Date</th>
+        <th class="px-4 py-3 text-center">Status</th>
+        <th class="px-4 py-3 text-center">Aksi</th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-gray-50">
+      {% for inv in invoices %}
+      <tr class="hover:bg-gray-50 {% if inv.display_status=='Lunas' %}hover:bg-green-50{% endif %} transition-colors"
+          x-data="{ pay: false }">
+        <td class="px-4 py-2.5 text-xs font-mono">
+          {% if inv.project_id %}
+          <a href="/revenue/tracker?search={{ inv.project_id }}&tahun={{ cur_year }}"
+             class="text-blue-500 hover:underline">{{ inv.project_id }}</a>
+          {% else %}<span class="text-gray-300">—</span>{% endif %}
+        </td>
+        <td class="px-4 py-2.5 font-medium text-gray-800 text-sm">{{ inv.client }}</td>
+        <td class="px-4 py-2.5 text-xs text-gray-600 max-w-[130px] truncate">{{ inv.product }}</td>
+        <td class="px-4 py-2.5 text-xs font-mono text-gray-400 max-w-[150px] truncate">{{ inv.invoice_no or '—' }}</td>
+        <td class="px-4 py-2.5 text-xs text-gray-600">{{ inv.period or '—' }}</td>
+        <td class="px-4 py-2.5 text-right text-xs font-mono text-gray-700">{{ "{:,.0f}".format(inv.invoice_amount) }}</td>
+        <td class="px-4 py-2.5 text-right text-xs font-mono font-semibold text-green-700">{{ "{:,.0f}".format(inv.paid_amount) }}</td>
+        <td class="px-4 py-2.5 text-xs text-gray-500 whitespace-nowrap">{{ inv.invoice_date or '—' }}</td>
+        <td class="px-4 py-2.5 text-xs text-gray-500 whitespace-nowrap">{{ inv.paid_date or '—' }}</td>
+        <td class="px-4 py-2.5 text-center">
+          <span class="text-xs px-2 py-0.5 rounded-full font-semibold
+            {% if inv.display_status=='Lunas' %}bg-green-100 text-green-700
+            {% elif inv.display_status=='Partial' %}bg-yellow-100 text-yellow-700
+            {% else %}bg-red-100 text-red-600{% endif %}">
+            {{ inv.display_status }}
+          </span>
+        </td>
+        <td class="px-4 py-2.5 text-center" x-show="!pay">
+          {% if inv.display_status != 'Lunas' %}
+          <button @click="pay=true" class="text-xs text-green-600 hover:text-green-800 px-2 py-1 hover:bg-green-50 rounded transition">
+            <i class="fas fa-money-bill-wave mr-1"></i>Bayar
+          </button>
+          {% else %}
+          <span class="text-xs text-green-500"><i class="fas fa-check"></i></span>
+          {% endif %}
+        </td>
+        <td colspan="2" class="px-4 py-2" x-show="pay" x-cloak>
+          <form method="post" action="/revenue/invoice/{{ inv.id }}/pay" class="flex gap-2 items-center">
+            <input type="number" name="paid_amount" value="{{ inv.invoice_amount|int }}"
+              class="border border-gray-200 rounded px-2 py-1 text-sm w-32 focus:outline-none focus:ring-2 focus:ring-blue-400">
+            <input type="date" name="paid_date"
+              class="border border-gray-200 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+            <button type="submit" class="bg-green-600 text-white px-3 py-1 rounded text-xs font-medium">OK</button>
+            <button type="button" @click="pay=false" class="text-gray-400 text-xs">Batal</button>
+          </form>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="11" class="px-5 py-10 text-center text-gray-400">Tidak ada invoice</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function fillFromProject(sel) {
+  const opt = sel.options[sel.selectedIndex];
+  document.getElementById('inv_client').value  = opt.dataset.client  || '';
+  document.getElementById('inv_product').value = opt.dataset.product || '';
+  document.getElementById('inv_owner').value   = opt.dataset.owner   || '';
+}
+</script>
+{% endblock %}

@@ -1,0 +1,410 @@
+{% extends "base.html" %}
+{% block title %}Pipeline{% endblock %}
+{% block page_title %}Pipeline{% endblock %}
+
+{% block content %}
+
+{# ── FILTER BAR ──────────────────────────────────────────────────────────── #}
+<div class="bg-white rounded-xl shadow-sm border border-gray-100 p-3 mb-4" x-data="{ filterOpen: false }">
+    <div class="flex items-center gap-2">
+        <form method="get" class="flex-1 flex items-center gap-2">
+            <div class="relative flex-1">
+                <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-300 text-xs pointer-events-none"></i>
+                <input name="search" value="{{ search }}" placeholder="Cari company, produk..."
+                    class="w-full border border-gray-200 rounded-lg pl-8 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+            </div>
+            {# Mobile: filter toggle button #}
+            <button type="button" @click="filterOpen = !filterOpen"
+                    class="lg:hidden flex items-center gap-1.5 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-500 hover:bg-gray-50 transition-colors">
+                <i class="fas fa-sliders-h text-xs"></i>
+                <span class="text-xs">Filter</span>
+                {% if filter_stage or filter_segmen or filter_sales %}
+                <span class="w-2 h-2 bg-blue-500 rounded-full"></span>
+                {% endif %}
+            </button>
+            {# Desktop: always visible filters #}
+            <div class="hidden lg:flex items-center gap-2">
+                <select name="stage" class="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+                    <option value="">Semua Stage</option>
+                    {% for s in ['New','In Progress','Demo Scheduled','Proposal Sent','Negotiation','Won','Lost','On Hold'] %}
+                    <option value="{{ s }}" {% if filter_stage == s %}selected{% endif %}>{{ s }}</option>
+                    {% endfor %}
+                </select>
+                <select name="segmen" class="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+                    <option value="">Semua Segmen</option>
+                    {% for s in ['Bank','Multifinance','Fintech','Koperasi','Others'] %}
+                    <option value="{{ s }}" {% if filter_segmen == s %}selected{% endif %}>{{ s }}</option>
+                    {% endfor %}
+                </select>
+                <select name="sales" class="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+                    <option value="">Semua Sales</option>
+                    {% for s in sales_list %}
+                    <option value="{{ s.nama }}" {% if filter_sales == s.nama %}selected{% endif %}>{{ s.nama }}</option>
+                    {% endfor %}
+                </select>
+                <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700 transition whitespace-nowrap">
+                    <i class="fas fa-search mr-1"></i> Cari
+                </button>
+                {% if filter_stage or filter_segmen or filter_sales or search %}
+                <a href="/pipeline" class="text-gray-400 hover:text-gray-600 text-sm px-2">Reset</a>
+                {% endif %}
+            </div>
+        </form>
+        <a href="/pipeline/new"
+           class="flex-shrink-0 flex items-center gap-1.5 bg-green-600 text-white px-3 py-2 rounded-lg text-sm hover:bg-green-700 transition font-medium">
+            <i class="fas fa-plus"></i>
+            <span class="hidden sm:inline">Tambah</span>
+        </a>
+    </div>
+
+    {# Mobile filter panel #}
+    <div x-show="filterOpen" x-cloak class="mt-3 pt-3 border-t border-gray-100">
+        <form method="get" class="grid grid-cols-2 gap-2">
+            {% if search %}<input type="hidden" name="search" value="{{ search }}">{% endif %}
+            <select name="stage" class="border border-gray-200 rounded-lg px-3 py-2 text-sm col-span-2 focus:outline-none focus:ring-2 focus:ring-blue-400">
+                <option value="">Semua Stage</option>
+                {% for s in ['New','In Progress','Demo Scheduled','Proposal Sent','Negotiation','Won','Lost','On Hold'] %}
+                <option value="{{ s }}" {% if filter_stage == s %}selected{% endif %}>{{ s }}</option>
+                {% endfor %}
+            </select>
+            <select name="segmen" class="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+                <option value="">Semua Segmen</option>
+                {% for s in ['Bank','Multifinance','Fintech','Koperasi','Others'] %}
+                <option value="{{ s }}" {% if filter_segmen == s %}selected{% endif %}>{{ s }}</option>
+                {% endfor %}
+            </select>
+            <select name="sales" class="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+                <option value="">Semua Sales</option>
+                {% for s in sales_list %}
+                <option value="{{ s.nama }}" {% if filter_sales == s.nama %}selected{% endif %}>{{ s.nama }}</option>
+                {% endfor %}
+            </select>
+            <button type="submit" class="col-span-2 bg-blue-600 text-white py-2 rounded-lg text-sm hover:bg-blue-700 transition font-medium">
+                Terapkan Filter
+            </button>
+            {% if filter_stage or filter_segmen or filter_sales or search %}
+            <a href="/pipeline" class="col-span-2 text-center text-gray-400 text-sm py-1">Reset Filter</a>
+            {% endif %}
+        </form>
+    </div>
+</div>
+
+{# ── SUMMARY CHIPS (mobile) ───────────────────────────────────────────────── #}
+<div class="flex gap-2 overflow-x-auto pb-1 mb-3 lg:hidden scrollbar-hide">
+    {% set stage_colors = {'New':'bg-blue-100 text-blue-700','In Progress':'bg-yellow-100 text-yellow-700',
+       'On Hold':'bg-gray-100 text-gray-600','Won':'bg-green-100 text-green-700','Lost':'bg-red-100 text-red-700'} %}
+    <span class="flex-shrink-0 bg-slate-100 text-slate-600 text-xs px-3 py-1.5 rounded-full font-medium">
+        {{ leads|length }} lead
+    </span>
+    {% for stage, cls in stage_colors.items() %}
+    {% set cnt = leads|selectattr('stage','eq',stage)|list|length %}
+    {% if cnt > 0 %}
+    <a href="/pipeline?stage={{ stage }}"
+       class="flex-shrink-0 {{ cls }} text-xs px-3 py-1.5 rounded-full font-medium whitespace-nowrap">
+        {{ stage }} · {{ cnt }}
+    </a>
+    {% endif %}
+    {% endfor %}
+</div>
+
+{# ── MOBILE: CARD VIEW ──────────────────────────────────────────────────── #}
+<div class="lg:hidden space-y-3">
+    {% for lead in leads %}
+    <div class="lead-card bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+        {# Card header - clickable #}
+        <a href="/pipeline/{{ lead.lead_id }}" class="block px-4 pt-4 pb-3">
+            <div class="flex items-start justify-between gap-2 mb-2">
+                <div class="min-w-0">
+                    <div class="font-semibold text-gray-800 leading-tight">{{ lead.nama_company }}</div>
+                    <div class="text-xs text-gray-400 mt-0.5 font-mono">{{ lead.lead_id }}
+                        {% if lead.product %} · {{ lead.product|truncate(25, true) }}{% endif %}
+                    </div>
+                </div>
+                <span class="flex-shrink-0 px-2 py-0.5 rounded text-xs font-semibold
+                    {% if lead.stage=='Won' %}stage-won{% elif lead.stage=='Lost' %}stage-lost
+                    {% elif lead.stage=='New' %}stage-new{% elif lead.stage=='In Progress' %}stage-in-progress
+                    {% elif lead.stage=='On Hold' %}stage-on-hold{% elif lead.stage=='Negotiation' %}stage-negotiation
+                    {% else %}stage-proposal{% endif %}">
+                    {{ lead.stage }}
+                </span>
+            </div>
+
+            <div class="flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-gray-500">
+                {% if lead.segmen %}
+                <span class="flex items-center gap-1">
+                    <i class="fas fa-building text-gray-300 w-3"></i>{{ lead.segmen }}
+                </span>
+                {% endif %}
+                {% if lead.sales_owner %}
+                <span class="flex items-center gap-1">
+                    <i class="fas fa-user text-gray-300 w-3"></i>{{ lead.sales_owner }}
+                </span>
+                {% endif %}
+                {% if lead.propose_value %}
+                <span class="flex items-center gap-1 font-medium text-blue-700">
+                    <i class="fas fa-tag text-blue-300 w-3"></i>Rp {{ "{:,.0f}".format(lead.propose_value) }}
+                </span>
+                {% endif %}
+            </div>
+
+            {% if lead.next_fu_date %}
+            <div class="mt-2 flex items-center gap-1.5 text-xs
+                {% if lead.next_fu_date < today_str %}text-red-500 font-semibold{% else %}text-orange-500{% endif %}">
+                <i class="fas fa-calendar-alt w-3"></i>
+                FU: {{ lead.next_fu_date }}
+                {% if lead.next_fu_date < today_str %}<span class="bg-red-100 text-red-600 px-1.5 py-0.5 rounded text-xs ml-1">Overdue</span>{% endif %}
+            </div>
+            {% endif %}
+            {# Stale badge mobile #}
+            {% if lead.stage not in ('Won','Lost') and lead.stale_flag != 'OK' %}
+            <div class="mt-1.5 flex items-center gap-1">
+              {% if lead.stale_flag == 'URGENT' %}
+                <span class="bg-red-100 text-red-700 text-xs font-bold px-2 py-0.5 rounded-full animate-pulse">
+                  🔴 Hot tanpa FU {{ lead.days_without_fu }} hari
+                </span>
+              {% elif lead.stale_flag == 'WARNING' %}
+                <span class="bg-yellow-100 text-yellow-700 text-xs font-bold px-2 py-0.5 rounded-full">
+                  🟡 Warm tanpa FU {{ lead.days_without_fu }} hari
+                </span>
+              {% elif lead.stale_flag == 'STALE' %}
+                <span class="bg-gray-200 text-gray-600 text-xs font-bold px-2 py-0.5 rounded-full">
+                  ⚪ Stagnan {{ lead.days_without_fu }} hari
+                </span>
+              {% endif %}
+            </div>
+            {% endif %}
+        </a>
+
+        {# Card footer - actions #}
+        <div class="flex items-center border-t border-gray-50 divide-x divide-gray-100">
+            <span class="flex-1 px-4 py-2.5 text-xs
+                {% if lead.prioritas=='Hot' %}text-red-500 font-semibold{% elif lead.prioritas=='Warm' %}text-orange-500{% else %}text-blue-500{% endif %}">
+                {% if lead.prioritas=='Hot' %}🔥{% elif lead.prioritas=='Warm' %}🟡{% else %}🔵{% endif %} {{ lead.prioritas }}
+            </span>
+            <a href="/pipeline/{{ lead.lead_id }}"
+               class="px-4 py-2.5 text-xs text-gray-500 hover:text-blue-600 hover:bg-blue-50 transition-colors">
+                <i class="fas fa-eye mr-1"></i>Detail
+            </a>
+            <a href="/pipeline/{{ lead.lead_id }}/edit"
+               class="px-4 py-2.5 text-xs text-blue-500 hover:text-blue-700 hover:bg-blue-50 transition-colors">
+                <i class="fas fa-edit mr-1"></i>Edit
+            </a>
+            <form method="post" action="/pipeline/{{ lead.lead_id }}/delete"
+                  onsubmit="return confirm('Hapus {{ lead.nama_company }}?')" class="inline">
+                <button class="px-4 py-2.5 text-xs text-red-400 hover:text-red-600 hover:bg-red-50 transition-colors">
+                    <i class="fas fa-trash-alt"></i>
+                </button>
+            </form>
+        </div>
+    </div>
+    {% else %}
+    <div class="bg-white rounded-xl border border-gray-100 p-12 text-center text-gray-400">
+        <i class="fas fa-inbox text-4xl mb-3 block text-gray-200"></i>
+        <p class="text-sm font-medium text-gray-500">Belum ada lead</p>
+        <a href="/pipeline/new" class="mt-3 inline-flex items-center gap-1.5 text-sm text-blue-600 hover:underline font-medium">
+            <i class="fas fa-plus-circle"></i> Tambah lead pertama
+        </a>
+    </div>
+    {% endfor %}
+</div>
+
+{# ── DESKTOP: TABLE VIEW ──────────────────────────────────────────────────── #}
+<div class="hidden lg:block bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+    <div class="px-5 py-3 border-b border-gray-100 flex items-center justify-between bg-gray-50">
+        <span class="text-sm font-medium text-gray-600">{{ leads|length }} lead ditemukan</span>
+        <span class="text-xs text-gray-400">Klik baris untuk detail</span>
+    </div>
+    <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+            <thead class="bg-gray-50 text-gray-500 text-xs uppercase border-b border-gray-100">
+                <tr>
+                    <th class="px-3 py-3 text-left w-28">Aksi</th>
+                    <th class="px-3 py-3 text-left w-20">ID</th>
+                    <th class="px-3 py-3 text-left">Company</th>
+                    <th class="px-3 py-3 text-left">Product</th>
+                    <th class="px-3 py-3 text-left">Segmen</th>
+                    <th class="px-3 py-3 text-left">Stage</th>
+                    <th class="px-3 py-3 text-left">Prioritas</th>
+                    <th class="px-3 py-3 text-right">Propose Value</th>
+                    <th class="px-3 py-3 text-left">Sales</th>
+                    <th class="px-3 py-3 text-left">Next FU</th>
+                    <th class="px-3 py-3 text-center">Aging FU</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-50">
+                {% for lead in leads %}
+                <tr class="hover:bg-blue-50 transition-colors cursor-pointer"
+                    onclick="window.location='/pipeline/{{ lead.lead_id }}'">
+                    <td class="px-3 py-3" onclick="event.stopPropagation()">
+                        <div class="flex items-center gap-1.5">
+                            <a href="/pipeline/{{ lead.lead_id }}/edit"
+                               class="inline-flex items-center gap-1 px-2 py-1 text-xs bg-blue-50 text-blue-600 hover:bg-blue-100 rounded font-medium transition-colors">
+                                <i class="fas fa-edit"></i> Edit
+                            </a>
+                            <form method="post" action="/pipeline/{{ lead.lead_id }}/delete" class="inline"
+                                onsubmit="return confirm('Hapus lead {{ lead.nama_company }}?')">
+                                <button type="submit"
+                                    class="inline-flex items-center px-2 py-1 text-xs bg-red-50 text-red-500 hover:bg-red-100 rounded font-medium transition-colors">
+                                    <i class="fas fa-trash-alt"></i>
+                                </button>
+                            </form>
+                            {% if lead.stage == 'Won' %}
+                            <button onclick="openRevModal('{{ lead.lead_id }}','{{ lead.nama_company|replace("'","\\'")|replace('"','&quot;') }}','{{ lead.product|replace("'","\\'")|replace('"','&quot;') }}','{{ lead.sales_owner }}','{{ (lead.deal_value or lead.propose_value or 0)|int }}')"
+                                class="inline-flex items-center gap-1 px-2 py-1 text-xs bg-green-50 text-green-700 hover:bg-green-100 rounded font-medium transition-colors"
+                                title="Kirim ke Revenue Tracker">
+                                <i class="fas fa-chart-line"></i> → Rev
+                            </button>
+                            {% endif %}
+                        </div>
+                    </td>
+                    <td class="px-3 py-3 font-mono text-xs text-gray-400">{{ lead.lead_id }}</td>
+                    <td class="px-3 py-3 font-medium text-gray-800">{{ lead.nama_company }}</td>
+                    <td class="px-3 py-3 text-gray-500 max-w-[140px] truncate text-xs">{{ lead.product or '—' }}</td>
+                    <td class="px-3 py-3 text-gray-500 text-xs">{{ lead.segmen or '—' }}</td>
+                    <td class="px-3 py-3">
+                        <span class="px-2 py-0.5 rounded text-xs font-medium
+                            {% if lead.stage=='Won' %}stage-won{% elif lead.stage=='Lost' %}stage-lost
+                            {% elif lead.stage=='New' %}stage-new{% elif lead.stage=='In Progress' %}stage-in-progress
+                            {% elif lead.stage=='On Hold' %}stage-on-hold{% elif lead.stage=='Negotiation' %}stage-negotiation
+                            {% else %}stage-proposal{% endif %}">{{ lead.stage }}</span>
+                    </td>
+                    <td class="px-3 py-3">
+                        <span class="text-xs font-medium
+                            {% if lead.prioritas=='Hot' %}text-red-600{% elif lead.prioritas=='Warm' %}text-orange-500{% else %}text-blue-600{% endif %}">
+                            {% if lead.prioritas=='Hot' %}🔥{% elif lead.prioritas=='Warm' %}🟡{% else %}🔵{% endif %} {{ lead.prioritas }}
+                        </span>
+                    </td>
+                    <td class="px-3 py-3 text-right text-xs text-gray-600 font-mono">
+                        {% if lead.propose_value %}Rp {{ "{:,}".format(lead.propose_value|int) }}{% else %}—{% endif %}
+                    </td>
+                    <td class="px-3 py-3 text-gray-500 text-xs">{{ lead.sales_owner or '—' }}</td>
+                    <td class="px-3 py-3 text-xs {% if lead.next_fu_date %}text-orange-600{% else %}text-gray-300{% endif %}">
+                        {{ lead.next_fu_date or '—' }}
+                    </td>
+                    <td class="px-3 py-3 text-center">
+                      {% if lead.stage not in ('Won','Lost') %}
+                        {% set dfu = lead.days_without_fu|default(999)|int %}
+                        {% set sf  = lead.stale_flag|default('OK') %}
+                        {% if sf == 'URGENT' %}
+                          <span class="inline-flex items-center gap-1 bg-red-100 text-red-700 text-xs font-bold px-2 py-0.5 rounded-full animate-pulse"
+                                title="Hot lead tanpa FU {{ dfu }} hari!">
+                            🔴 {{ dfu }}h
+                          </span>
+                        {% elif sf == 'WARNING' %}
+                          <span class="inline-flex items-center gap-1 bg-yellow-100 text-yellow-700 text-xs font-bold px-2 py-0.5 rounded-full"
+                                title="Warm lead tanpa FU {{ dfu }} hari">
+                            🟡 {{ dfu }}h
+                          </span>
+                        {% elif sf == 'STALE' %}
+                          <span class="inline-flex items-center gap-1 bg-gray-200 text-gray-600 text-xs font-bold px-2 py-0.5 rounded-full"
+                                title="Stagnan {{ dfu }} hari">
+                            ⚪ {{ dfu }}h
+                          </span>
+                        {% elif dfu is not none and dfu < 999 %}
+                          <span class="text-xs text-green-600 font-medium">✅ {{ dfu }}h</span>
+                        {% else %}
+                          <span class="text-xs text-gray-300">—</span>
+                        {% endif %}
+                      {% else %}
+                        <span class="text-xs text-gray-300">—</span>
+                      {% endif %}
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="10" class="px-5 py-12 text-center text-gray-400">
+                        <i class="fas fa-inbox text-3xl mb-3 block"></i>
+                        Belum ada data lead.
+                        <a href="/pipeline/new" class="text-blue-500 hover:underline ml-1">Tambah lead pertama</a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const today_str = "{{ today_str|default('') }}";
+
+function openRevModal(leadId, company, product, salesOwner, dealValue) {
+  document.getElementById('rm_lead_id').value      = leadId;
+  document.getElementById('rm_company').value      = company;
+  document.getElementById('rm_product').value      = product;
+  document.getElementById('rm_sales_owner').value  = salesOwner;
+  document.getElementById('rm_deal_value').value   = dealValue;
+  document.getElementById('rm_nama_display').textContent = company;
+  document.getElementById('revModal').classList.remove('hidden');
+}
+function closeRevModal() {
+  document.getElementById('revModal').classList.add('hidden');
+}
+</script>
+
+{# Modal: Insert ke Revenue Tracker #}
+<div id="revModal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6">
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="font-bold text-gray-800 flex items-center gap-2">
+        <i class="fas fa-chart-line text-green-600"></i>
+        Kirim ke Revenue Tracker
+      </h3>
+      <button onclick="closeRevModal()" class="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+    </div>
+    <p class="text-sm text-gray-500 mb-4">
+      Lead <strong id="rm_nama_display"></strong> akan didaftarkan sebagai proyek revenue baru.
+    </p>
+    <form method="post" action="/revenue/tracker/from-pipeline" class="space-y-3">
+      <input type="hidden" name="lead_id"      id="rm_lead_id">
+      <input type="hidden" name="nama_company" id="rm_company">
+      <input type="hidden" name="sales_owner"  id="rm_sales_owner">
+      <div>
+        <label class="text-xs text-gray-500 mb-1 block">Produk / Solusi</label>
+        <input name="product" id="rm_product" required
+          class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="text-xs text-gray-500 mb-1 block">Deal Value (Rp)</label>
+          <input type="number" name="deal_value" id="rm_deal_value" required
+            class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+        </div>
+        <div>
+          <label class="text-xs text-gray-500 mb-1 block">Tahun</label>
+          <input type="number" name="tahun" value="{{ today_str[:4] }}"
+            class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+        </div>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="text-xs text-gray-500 mb-1 block">Kategori</label>
+          <select name="kategori" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400">
+            <option>Project</option><option>Recurring</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-xs text-gray-500 mb-1 block">Type</label>
+          <select name="type" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400">
+            <option>One Time</option><option>Termin</option><option>Tahunan</option><option>Bulanan</option>
+          </select>
+        </div>
+      </div>
+      <div>
+        <label class="text-xs text-gray-500 mb-1 block">Catatan</label>
+        <input name="notes" placeholder="Opsional..."
+          class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+      </div>
+      <div class="flex gap-2 pt-2">
+        <button type="submit"
+          class="flex-1 bg-green-600 text-white py-2 rounded-lg text-sm font-semibold hover:bg-green-700 transition">
+          <i class="fas fa-chart-line mr-1"></i>Daftarkan ke Revenue Tracker
+        </button>
+        <button type="button" onclick="closeRevModal()"
+          class="px-4 py-2 text-gray-500 text-sm hover:bg-gray-100 rounded-lg">Batal</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,91 @@
+name: apex_app
+description: "APEX - Achievement & Performance Execution Platform for PT. PKP"
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.12.1
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # UI & Icons
+  cupertino_icons: ^1.0.8
+  google_fonts: ^6.2.1
+  flutter_svg: ^2.0.10+1
+  cached_network_image: ^3.4.1
+  shimmer: ^3.0.0
+  fl_chart: ^0.71.0
+
+  # State Management
+  flutter_riverpod: ^2.6.1
+  riverpod_annotation: ^2.5.1
+
+  # Navigation
+  go_router: ^15.1.2
+
+  # Networking & API
+  dio: ^5.8.0+1
+  retrofit: ^4.4.2
+
+  # Local Storage & Auth
+  flutter_secure_storage: ^9.2.4
+  shared_preferences: ^2.3.5
+
+  # Biometric Auth
+  local_auth: ^2.3.0
+
+  # Date & Time
+  intl: ^0.20.2
+  table_calendar: ^3.2.0
+
+  # Form & Input
+  flutter_form_builder: ^10.0.1
+  form_builder_validators: ^11.1.2
+
+  # Utils
+  connectivity_plus: ^6.1.4
+  package_info_plus: ^8.3.0
+  url_launcher: ^6.3.1
+  pull_to_refresh: ^2.0.0
+
+  # GPS / Location
+  geolocator: ^13.0.2
+  geocoding: ^3.0.0
+  image_picker: ^1.2.2
+  flutter_map: ^8.3.0
+  latlong2: ^0.9.1
+  http: ^1.6.0
+
+  # Phase 3 — Voice Note
+  speech_to_text: ^7.0.0
+  path_provider: ^2.1.4
+
+  # Phase 3 — OCR Scan Kartu Nama
+  google_mlkit_text_recognition: ^0.13.1
+
+  # Background location tracking
+  workmanager: ^0.5.2
+
+  # Local push notifications (FU reminder, overdue alert)
+  flutter_local_notifications: ^18.0.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  build_runner: ^2.4.14
+  riverpod_generator: ^2.6.3
+  retrofit_generator: ^9.1.6
+  json_serializable: ^6.9.4
+  json_annotation: ^4.9.0
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/images/
+
+  # Fonts via google_fonts package (no local font files needed)

@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+{% block title %}Master Sales Owner{% endblock %}
+{% block page_title %}Master Sales Owner{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto space-y-5">
+
+    <!-- Add form -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden" x-data="{ open: false }">
+        <div class="px-5 py-4 flex items-center justify-between bg-gray-50 border-b border-gray-100">
+            <h2 class="font-semibold text-sm text-gray-700">
+                <i class="fas fa-users text-blue-500 mr-2"></i>Daftar Sales Team
+            </h2>
+            <button @click="open = !open"
+                class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700 transition flex items-center gap-2">
+                <i class="fas fa-plus"></i> Tambah Sales
+            </button>
+        </div>
+
+        <!-- Add form -->
+        <div x-show="open" x-cloak class="p-5 border-b border-gray-100 bg-blue-50">
+            <form method="post" action="/sales/new" class="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
+                <div>
+                    <label class="text-xs text-gray-500 mb-1 block">Nama <span class="text-red-400">*</span></label>
+                    <input name="nama" required placeholder="Nama lengkap"
+                        class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+                </div>
+                <div>
+                    <label class="text-xs text-gray-500 mb-1 block">Email</label>
+                    <input type="email" name="email" placeholder="email@pkp.co.id"
+                        class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+                </div>
+                <div>
+                    <label class="text-xs text-gray-500 mb-1 block">Role</label>
+                    <select name="role" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+                        <option value="sales">Sales</option>
+                        <option value="admin">Admin</option>
+                        <option value="manager">Manager</option>
+                    </select>
+                </div>
+                <div class="flex gap-2">
+                    <button type="submit" class="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700 transition font-medium">
+                        Simpan
+                    </button>
+                    <button type="button" @click="open = false" class="px-3 py-2 text-gray-400 hover:text-gray-600 text-sm">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- List -->
+        <table class="w-full text-sm">
+            <thead class="bg-gray-50 text-gray-500 text-xs uppercase border-b border-gray-100">
+                <tr>
+                    <th class="px-5 py-3 text-left">#</th>
+                    <th class="px-5 py-3 text-left">Nama</th>
+                    <th class="px-5 py-3 text-left">Email</th>
+                    <th class="px-5 py-3 text-left">Role</th>
+                    <th class="px-5 py-3 text-left">Terdaftar</th>
+                    <th class="px-5 py-3 text-center">Aksi</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-50">
+                {% for s in sales_list %}
+                <tr class="hover:bg-gray-50" x-data="{ editing: false }">
+                    <td class="px-5 py-3 text-gray-400 text-xs">{{ s.id }}</td>
+
+                    <!-- View mode -->
+                    <td class="px-5 py-3" x-show="!editing">
+                        <div class="font-medium text-gray-800">{{ s.nama }}</div>
+                    </td>
+                    <td class="px-5 py-3" x-show="!editing">
+                        <span class="text-gray-500 text-xs">{{ s.email or '-' }}</span>
+                    </td>
+                    <td class="px-5 py-3" x-show="!editing">
+                        <span class="px-2 py-0.5 rounded-full text-xs font-medium
+                            {% if s.role == 'admin' %}bg-purple-100 text-purple-700
+                            {% elif s.role == 'manager' %}bg-blue-100 text-blue-700
+                            {% else %}bg-gray-100 text-gray-600{% endif %}">
+                            {{ s.role }}
+                        </span>
+                    </td>
+                    <td class="px-5 py-3 text-xs text-gray-400" x-show="!editing">{{ s.created_at[:10] if s.created_at else '-' }}</td>
+
+                    <!-- Edit mode -->
+                    <td class="px-5 py-3" x-show="editing" x-cloak colspan="4">
+                        <form method="post" action="/sales/{{ s.id }}/edit" class="flex gap-2 items-center">
+                            <input name="nama" value="{{ s.nama }}" required
+                                class="border border-gray-200 rounded-lg px-3 py-1.5 text-sm w-40 focus:outline-none focus:ring-2 focus:ring-blue-400">
+                            <input name="email" value="{{ s.email or '' }}" type="email"
+                                class="border border-gray-200 rounded-lg px-3 py-1.5 text-sm w-48 focus:outline-none focus:ring-2 focus:ring-blue-400">
+                            <select name="role" class="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+                                <option value="sales" {% if s.role == 'sales' %}selected{% endif %}>Sales</option>
+                                <option value="admin" {% if s.role == 'admin' %}selected{% endif %}>Admin</option>
+                                <option value="manager" {% if s.role == 'manager' %}selected{% endif %}>Manager</option>
+                            </select>
+                            <button type="submit" class="bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs hover:bg-green-700">
+                                <i class="fas fa-check"></i> Simpan
+                            </button>
+                            <button type="button" @click="editing = false" class="text-gray-400 hover:text-gray-600 text-xs px-2">Batal</button>
+                        </form>
+                    </td>
+
+                    <td class="px-5 py-3 text-center" x-show="!editing">
+                        <button @click="editing = true"
+                            class="text-blue-500 hover:text-blue-700 mr-3 text-sm">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <form method="post" action="/sales/{{ s.id }}/delete" class="inline"
+                            onsubmit="return confirm('Hapus {{ s.nama }} dari master sales?')">
+                            <button type="submit" class="text-red-400 hover:text-red-600 text-sm">
+                                <i class="fas fa-trash-alt"></i>
+                            </button>
+                        </form>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="6" class="px-5 py-10 text-center text-gray-400">
+                        <i class="fas fa-users text-3xl mb-2 block text-gray-200"></i>
+                        Belum ada data sales. Klik "Tambah Sales" untuk memulai.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Info box -->
+    <div class="bg-blue-50 rounded-xl border border-blue-100 p-4 text-sm text-blue-700">
+        <i class="fas fa-info-circle mr-2"></i>
+        Data master ini digunakan sebagai lookup di semua form transaksi (Pipeline, Follow-Up Log, FU Schedule).
+        Pastikan nama sales sesuai agar assignment terlacak dengan benar.
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,155 @@
+{% extends "base.html" %}
+{% block title %}FU Schedule{% endblock %}
+{% block page_title %}Follow-Up Schedule{% endblock %}
+
+{% block content %}
+
+{# ── KPI STRIP ───────────────────────────────────────────────────────────── #}
+{% set overdue_list  = schedule | selectattr('fu_status','eq','Overdue') | list %}
+{% set today_list    = schedule | selectattr('fu_status','eq','Today')   | list %}
+{% set upcoming_list = schedule | selectattr('fu_status','eq','Upcoming')| list %}
+
+<div class="grid grid-cols-3 gap-3 mb-4">
+  <div class="bg-red-600 text-white rounded-xl p-3 sm:p-4 text-center shadow-sm">
+    <div class="text-2xl sm:text-3xl font-black">{{ overdue_list|length }}</div>
+    <div class="text-xs font-medium opacity-90 mt-0.5">🚨 Overdue</div>
+  </div>
+  <div class="bg-orange-500 text-white rounded-xl p-3 sm:p-4 text-center shadow-sm">
+    <div class="text-2xl sm:text-3xl font-black">{{ today_list|length }}</div>
+    <div class="text-xs font-medium opacity-90 mt-0.5">📅 Hari Ini</div>
+  </div>
+  <div class="bg-blue-600 text-white rounded-xl p-3 sm:p-4 text-center shadow-sm">
+    <div class="text-2xl sm:text-3xl font-black">{{ upcoming_list|length }}</div>
+    <div class="text-xs font-medium opacity-90 mt-0.5">🗓️ Upcoming</div>
+  </div>
+</div>
+
+{# ── MOBILE: CARD LIST ────────────────────────────────────────────────────── #}
+<div class="lg:hidden space-y-3">
+  {% for item in schedule %}
+  <a href="/pipeline/{{ item.lead_id }}"
+     class="lead-card block bg-white rounded-xl border shadow-sm overflow-hidden
+            {% if item.fu_status=='Overdue' %}border-red-200{% elif item.fu_status=='Today' %}border-orange-200{% else %}border-gray-100{% endif %}">
+    {# Status bar #}
+    <div class="px-4 py-2 flex items-center justify-between
+                {% if item.fu_status=='Overdue' %}bg-red-50{% elif item.fu_status=='Today' %}bg-orange-50{% else %}bg-blue-50{% endif %}">
+      <span class="text-xs font-bold
+        {% if item.fu_status=='Overdue' %}text-red-700{% elif item.fu_status=='Today' %}text-orange-700{% else %}text-blue-700{% endif %}">
+        {% if item.fu_status=='Overdue' %}🚨 Overdue{% elif item.fu_status=='Today' %}📅 Hari Ini{% else %}🗓️ {{ item.next_fu_date }}{% endif %}
+      </span>
+      <span class="text-xs font-semibold
+        {% if item.prioritas=='Hot' %}text-red-500{% elif item.prioritas=='Warm' %}text-orange-500{% else %}text-blue-500{% endif %}">
+        {% if item.prioritas=='Hot' %}🔥{% elif item.prioritas=='Warm' %}🟡{% else %}🔵{% endif %} {{ item.prioritas }}
+      </span>
+    </div>
+
+    <div class="px-4 py-3">
+      <div class="flex items-start justify-between gap-2 mb-2">
+        <div class="min-w-0">
+          <div class="font-semibold text-gray-800 text-sm leading-tight">{{ item.nama_company }}</div>
+          <div class="text-xs text-gray-400 font-mono mt-0.5">{{ item.lead_id }}</div>
+        </div>
+        <span class="flex-shrink-0 px-2 py-0.5 rounded text-xs font-medium
+          {% if item.stage=='New' %}stage-new{% elif item.stage=='In Progress' %}stage-in-progress
+          {% elif item.stage=='On Hold' %}stage-on-hold{% elif item.stage=='Negotiation' %}stage-negotiation
+          {% else %}stage-proposal{% endif %}">{{ item.stage }}</span>
+      </div>
+      <div class="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500">
+        {% if item.sales_owner %}
+        <span><i class="fas fa-user w-3 text-gray-300 mr-1"></i>{{ item.sales_owner }}</span>
+        {% endif %}
+        {% if item.segmen %}
+        <span><i class="fas fa-building w-3 text-gray-300 mr-1"></i>{{ item.segmen }}</span>
+        {% endif %}
+        {% if item.propose_value %}
+        <span class="text-blue-600 font-medium">
+          <i class="fas fa-tag w-3 mr-1"></i>Rp {{ "{:,.0f}".format(item.propose_value) }}
+        </span>
+        {% endif %}
+      </div>
+      {% if item.last_fu_notes %}
+      <p class="mt-2 text-xs text-gray-500 bg-gray-50 rounded-lg px-2.5 py-1.5 leading-relaxed line-clamp-2">
+        {{ item.last_fu_notes }}
+      </p>
+      {% endif %}
+    </div>
+  </a>
+  {% else %}
+  <div class="bg-white rounded-xl border border-green-200 p-10 text-center">
+    <div class="text-4xl mb-3">🎉</div>
+    <div class="font-bold text-green-700 text-sm">Semua bersih!</div>
+    <div class="text-gray-400 text-xs mt-1">Tidak ada jadwal FU aktif</div>
+  </div>
+  {% endfor %}
+</div>
+
+{# ── DESKTOP: TABLE ───────────────────────────────────────────────────────── #}
+<div class="hidden lg:block bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+  <div class="px-5 py-3 bg-gray-50 border-b border-gray-100 text-sm font-medium text-gray-600">
+    Semua jadwal FU aktif — diurutkan berdasarkan tanggal
+  </div>
+  <div class="overflow-x-auto">
+    <table class="w-full text-sm">
+      <thead class="bg-gray-50 text-gray-400 text-xs uppercase border-b border-gray-100">
+        <tr>
+          <th class="px-4 py-2.5 text-left">Status</th>
+          <th class="px-4 py-2.5 text-left">Next FU</th>
+          <th class="px-4 py-2.5 text-left">Lead</th>
+          <th class="px-4 py-2.5 text-left">Stage</th>
+          <th class="px-4 py-2.5 text-left">Prioritas</th>
+          <th class="px-4 py-2.5 text-left">Sales Owner</th>
+          <th class="px-4 py-2.5 text-right">Nilai</th>
+          <th class="px-4 py-2.5 text-left">Last FU Notes</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-gray-50">
+        {% for item in schedule %}
+        <tr class="hover:bg-gray-50 transition-colors cursor-pointer
+                   {% if item.fu_status=='Overdue' %}bg-red-50/50{% elif item.fu_status=='Today' %}bg-orange-50/50{% endif %}"
+            onclick="location='/pipeline/{{ item.lead_id }}'">
+          <td class="px-4 py-2.5">
+            {% if item.fu_status=='Overdue' %}
+            <span class="bg-red-100 text-red-700 text-xs font-bold px-2 py-0.5 rounded-full">🚨 Overdue</span>
+            {% elif item.fu_status=='Today' %}
+            <span class="bg-orange-100 text-orange-700 text-xs font-bold px-2 py-0.5 rounded-full">📅 Today</span>
+            {% else %}
+            <span class="bg-blue-50 text-blue-600 text-xs px-2 py-0.5 rounded-full">Upcoming</span>
+            {% endif %}
+          </td>
+          <td class="px-4 py-2.5 text-xs font-semibold whitespace-nowrap
+            {% if item.fu_status=='Overdue' %}text-red-700{% elif item.fu_status=='Today' %}text-orange-700{% else %}text-blue-700{% endif %}">
+            {{ item.next_fu_date }}
+          </td>
+          <td class="px-4 py-2.5">
+            <div class="font-medium text-gray-800 text-sm">{{ item.nama_company }}</div>
+            <div class="text-xs text-gray-400 font-mono">{{ item.lead_id }}</div>
+          </td>
+          <td class="px-4 py-2.5">
+            <span class="px-2 py-0.5 rounded text-xs font-medium
+              {% if item.stage=='New' %}stage-new{% elif item.stage=='In Progress' %}stage-in-progress
+              {% elif item.stage=='On Hold' %}stage-on-hold{% elif item.stage=='Negotiation' %}stage-negotiation
+              {% else %}stage-proposal{% endif %}">{{ item.stage }}</span>
+          </td>
+          <td class="px-4 py-2.5 text-xs font-semibold
+            {% if item.prioritas=='Hot' %}text-red-600{% elif item.prioritas=='Warm' %}text-orange-500{% else %}text-blue-600{% endif %}">
+            {% if item.prioritas=='Hot' %}🔥{% elif item.prioritas=='Warm' %}🟡{% else %}🔵{% endif %} {{ item.prioritas }}
+          </td>
+          <td class="px-4 py-2.5 text-xs text-gray-600">{{ item.sales_owner or '—' }}</td>
+          <td class="px-4 py-2.5 text-right text-xs font-mono text-gray-600">
+            {% if item.propose_value %}Rp {{ "{:,}".format(item.propose_value|int) }}{% else %}—{% endif %}
+          </td>
+          <td class="px-4 py-2.5 text-xs text-gray-500 max-w-[200px] truncate">{{ item.last_fu_notes or '—' }}</td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="8" class="px-5 py-12 text-center text-gray-400">
+            <div class="text-4xl mb-3">🎉</div>
+            <div class="font-medium text-gray-500">Tidak ada jadwal FU aktif</div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

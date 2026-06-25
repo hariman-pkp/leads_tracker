@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>{% block title %}CRM Leads Tracker{% endblock %} — DCSS</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        [x-cloak] { display: none !important; }
+        .sidebar-link.active { background-color: #1e40af; color: white; }
+        .sidebar-link.active i { color: white !important; }
+        .stage-new       { background:#dbeafe; color:#1e40af; }
+        .stage-in-progress { background:#fef9c3; color:#854d0e; }
+        .stage-demo      { background:#f3e8ff; color:#6b21a8; }
+        .stage-proposal  { background:#ffedd5; color:#9a3412; }
+        .stage-negotiation { background:#fde68a; color:#92400e; }
+        .stage-won       { background:#dcfce7; color:#166534; }
+        .stage-lost      { background:#fee2e2; color:#991b1b; }
+        .stage-on-hold   { background:#f3f4f6; color:#374151; }
+        .priority-hot    { background:#fef2f2; color:#dc2626; }
+        .priority-warm   { background:#fff7ed; color:#c2410c; }
+        .priority-cold   { background:#eff6ff; color:#1d4ed8; }
+        .overdue         { background:#fee2e2 !important; }
+        .nav-group-label { font-size:0.6rem; letter-spacing:0.1em; }
+
+        /* Mobile bottom nav */
+        .mobile-nav-item.active { color: #3b82f6; }
+        .mobile-nav-item.active span { color: #3b82f6; }
+
+        /* Card hover */
+        .lead-card { transition: box-shadow 0.15s, transform 0.15s; }
+        .lead-card:active { transform: scale(0.99); }
+
+        /* Safe area for iOS */
+        .pb-safe { padding-bottom: env(safe-area-inset-bottom, 16px); }
+
+        /* Mobile overlay sidebar */
+        .sidebar-overlay { transition: opacity 0.2s; }
+    </style>
+</head>
+<body class="bg-gray-50 font-sans"
+      x-data="{
+        sidebarOpen: window.innerWidth >= 1024,
+        mobileSidebar: false,
+        isMobile: window.innerWidth < 1024
+      }"
+      x-init="window.addEventListener('resize', () => {
+        isMobile = window.innerWidth < 1024;
+        if (!isMobile) { mobileSidebar = false; sidebarOpen = true; }
+      })">
+
+    <div class="flex h-screen overflow-hidden">
+
+        <!-- ── MOBILE SIDEBAR OVERLAY ──────────────────────────────────────── -->
+        <div x-show="mobileSidebar && isMobile" x-cloak
+             class="sidebar-overlay fixed inset-0 bg-black/50 z-40 lg:hidden"
+             @click="mobileSidebar = false"></div>
+
+        <!-- ── SIDEBAR (desktop: persistent, mobile: drawer) ───────────────── -->
+        <aside class="bg-slate-900 text-white flex flex-col flex-shrink-0 z-50
+                      transition-all duration-300
+                      lg:relative lg:translate-x-0
+                      fixed inset-y-0 left-0"
+               :class="{
+                 'w-60': !isMobile && sidebarOpen,
+                 'w-[60px]': !isMobile && !sidebarOpen,
+                 'w-72 translate-x-0': isMobile && mobileSidebar,
+                 '-translate-x-full w-72': isMobile && !mobileSidebar
+               }">
+
+            <!-- Brand -->
+            <div class="p-4 border-b border-slate-700/60 flex items-center gap-3 min-h-[60px]">
+                <div class="bg-blue-600 rounded-lg p-2 flex-shrink-0 shadow">
+                    <i class="fas fa-chart-line text-white text-sm"></i>
+                </div>
+                <div x-show="sidebarOpen || isMobile" x-cloak class="overflow-hidden">
+                    <div class="font-bold text-sm leading-tight whitespace-nowrap">CRM Leads Tracker</div>
+                    <div class="text-xs text-slate-400 whitespace-nowrap">LOB DCSS 2026</div>
+                </div>
+                <!-- Close button on mobile -->
+                <button x-show="isMobile" @click="mobileSidebar = false"
+                        class="ml-auto text-slate-400 hover:text-white p-1">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+
+            <!-- Navigation dinamis -->
+            <nav class="flex-1 p-2.5 overflow-y-auto space-y-0.5">
+                {% set ns = namespace(cur_group='') %}
+                {% for menu in nav_menus %}
+                    {% if menu.group != ns.cur_group %}
+                        {% set ns.cur_group = menu.group %}
+                        <div x-show="sidebarOpen || isMobile" x-cloak
+                             class="nav-group-label text-slate-500 font-bold uppercase px-3 pt-3 pb-1 tracking-widest">
+                            {{ menu.group }}
+                        </div>
+                    {% endif %}
+                    {% set is_active = (menu.url == '/' and request.url.path == '/') or
+                                       (menu.url != '/' and menu.url in request.url.path) %}
+                    <a href="{{ menu.url }}"
+                       @click="if(isMobile) mobileSidebar = false"
+                       class="sidebar-link flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-slate-700/70 transition-colors {{ 'active' if is_active else '' }}"
+                       title="{{ menu.label }}">
+                        <i class="fas {{ menu.icon }} w-5 text-center text-sm flex-shrink-0
+                           {% if menu.key in ['today','insights'] %}text-yellow-400
+                           {% elif menu.key == 'export' %}text-green-400
+                           {% elif menu.key == 'roles' %}text-purple-400
+                           {% elif menu.key == 'users' %}text-blue-400
+                           {% else %}text-slate-400{% endif %}"></i>
+                        <span x-show="sidebarOpen || isMobile" x-cloak
+                              class="text-sm whitespace-nowrap leading-tight
+                              {% if menu.key in ['today','insights'] %}font-semibold text-yellow-300
+                              {% elif menu.key == 'export' %}text-green-400
+                              {% else %}text-slate-200{% endif %}">
+                            {{ menu.label }}
+                        </span>
+                    </a>
+                {% endfor %}
+            </nav>
+
+            <!-- User info -->
+            <div class="border-t border-slate-700/60" x-data="{ open: false }">
+                <div x-show="sidebarOpen || isMobile" x-cloak>
+                    <div @click="open = !open"
+                         class="flex items-center gap-2.5 m-3 px-2 py-2 rounded-lg hover:bg-slate-700/60 cursor-pointer transition-colors">
+                        <div class="w-7 h-7 rounded-full bg-blue-600 flex items-center justify-center text-xs font-bold flex-shrink-0">
+                            {{ current_user.nama[0]|upper if current_user else '?' }}
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <div class="text-xs font-semibold text-slate-200 truncate">{{ current_user.nama if current_user else 'Guest' }}</div>
+                            <div class="text-xs text-slate-500 truncate">{{ current_user.role_nama if current_user else '' }}</div>
+                        </div>
+                        <i class="fas fa-chevron-up text-slate-500 text-xs transition-transform duration-200" :class="open ? '' : 'rotate-180'"></i>
+                    </div>
+                    <div x-show="open" x-cloak class="pb-1 px-5">
+                        <a href="/logout"
+                           class="flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-red-400 hover:bg-red-900/30 hover:text-red-300 transition-colors"
+                           onclick="return confirm('Yakin ingin keluar?')">
+                            <i class="fas fa-sign-out-alt w-4"></i> Keluar
+                        </a>
+                    </div>
+                </div>
+                <!-- Collapsed: avatar only -->
+                <div x-show="!sidebarOpen && !isMobile" class="p-3 flex justify-center">
+                    <a href="/logout" title="Logout"
+                       class="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-xs font-bold hover:bg-red-600 transition-colors"
+                       onclick="return confirm('Yakin keluar?')">
+                        {{ current_user.nama[0]|upper if current_user else '?' }}
+                    </a>
+                </div>
+                <!-- Collapse toggle (desktop only) -->
+                <button x-show="!isMobile" @click="sidebarOpen = !sidebarOpen"
+                        class="w-full flex items-center justify-center gap-2 py-2.5 text-slate-500 hover:text-slate-300 transition-colors text-xs border-t border-slate-700/60">
+                    <i class="fas" :class="sidebarOpen ? 'fa-chevron-left' : 'fa-chevron-right'"></i>
+                    <span x-show="sidebarOpen" x-cloak>Collapse</span>
+                </button>
+            </div>
+        </aside>
+
+        <!-- ── MAIN CONTENT ───────────────────────────────────────────────── -->
+        <main class="flex-1 overflow-y-auto min-w-0 flex flex-col">
+
+            <!-- Header -->
+            <header class="bg-white border-b border-gray-200 px-4 lg:px-6 py-3 flex items-center gap-3 sticky top-0 z-30 shadow-sm">
+                <!-- Hamburger (mobile) -->
+                <button class="lg:hidden flex-shrink-0 p-2 -ml-1 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors"
+                        @click="mobileSidebar = true">
+                    <i class="fas fa-bars text-base"></i>
+                </button>
+
+                <h1 class="flex-1 text-sm lg:text-base font-semibold text-gray-800 truncate">
+                    {% block page_title %}Dashboard{% endblock %}
+                </h1>
+
+                <div class="flex items-center gap-2 lg:gap-4">
+                    <!-- Clock (hidden on mobile) -->
+                    <div class="hidden md:flex items-center gap-1.5 text-xs text-gray-400">
+                        <i class="fas fa-clock"></i>
+                        <span id="clock"></span>
+                    </div>
+                    <!-- User badge -->
+                    <div class="flex items-center gap-1.5 bg-gray-50 border border-gray-200 rounded-full pl-1 pr-3 py-1 text-xs text-gray-600">
+                        <div class="w-6 h-6 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
+                            {{ current_user.nama[0]|upper if current_user else '?' }}
+                        </div>
+                        <span class="font-medium hidden sm:inline">{{ current_user.nama if current_user else '' }}</span>
+                        <span class="text-gray-300 hidden sm:inline">·</span>
+                        <span class="text-gray-400 hidden sm:inline">{{ current_user.role_nama if current_user else '' }}</span>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Page content -->
+            <div class="flex-1 p-3 lg:p-6 pb-20 lg:pb-6">
+                {% block content %}{% endblock %}
+            </div>
+        </main>
+    </div>
+
+    <!-- ── MOBILE BOTTOM NAVIGATION ────────────────────────────────────────── -->
+    <nav class="lg:hidden fixed bottom-0 inset-x-0 bg-white border-t border-gray-200 z-30 pb-safe">
+        <div class="flex items-stretch">
+            {% set bottom_nav_keys = ['today','pipeline','followup','schedule','dashboard'] %}
+            {% for menu in nav_menus if menu.key in bottom_nav_keys %}
+                {% set is_active = (menu.url == '/' and request.url.path == '/') or
+                                   (menu.url != '/' and menu.url in request.url.path) %}
+                <a href="{{ menu.url }}"
+                   class="mobile-nav-item flex-1 flex flex-col items-center justify-center gap-0.5 py-2.5 text-gray-400 hover:text-blue-600 transition-colors {{ 'active' if is_active else '' }}">
+                    <i class="fas {{ menu.icon }} text-base leading-none"></i>
+                    <span class="text-[10px] leading-tight font-medium">
+                        {{ menu.label|truncate(7, true, '') }}
+                    </span>
+                </a>
+            {% endfor %}
+            <!-- More menu trigger -->
+            <button @click="mobileSidebar = true"
+                    class="mobile-nav-item flex-1 flex flex-col items-center justify-center gap-0.5 py-2.5 text-gray-400 hover:text-blue-600 transition-colors">
+                <i class="fas fa-th-large text-base leading-none"></i>
+                <span class="text-[10px] leading-tight font-medium">Menu</span>
+            </button>
+        </div>
+    </nav>
+
+    <script>
+        function fmt(n)   { if (!n && n!==0) return '—'; return new Intl.NumberFormat('id-ID').format(n); }
+        function fmtRp(n) { if (!n && n!==0) return '—'; return 'Rp ' + new Intl.NumberFormat('id-ID').format(n); }
+        function updateClock() {
+            const el = document.getElementById('clock');
+            if (el) el.textContent = new Date().toLocaleString('id-ID', {
+                weekday:'short', day:'2-digit', month:'short', year:'numeric',
+                hour:'2-digit', minute:'2-digit'
+            });
+        }
+        updateClock();
+        setInterval(updateClock, 1000);
+    </script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>
