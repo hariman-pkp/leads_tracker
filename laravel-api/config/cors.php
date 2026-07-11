@@ -15,7 +15,7 @@ return [
     |
     */
 
-    'paths' => ['api/*', 'sanctum/csrf-cookie', 'uploads/*'],
+    'paths' => ['api/*', 'v1/*', 'sanctum/csrf-cookie', 'uploads/*'],
 
     'allowed_methods' => ['*'],
 
@@ -26,6 +26,8 @@ return [
         'http://127.0.0.1:3000',
         'http://127.0.0.1:3030',
         'http://127.0.0.1:8080',
+        'https://apex.hariman.online',
+        'http://apex.hariman.online',
     ],
 
     'allowed_origins_patterns' => [
