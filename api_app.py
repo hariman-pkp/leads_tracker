@@ -1667,7 +1667,20 @@ def revenue_summary_api(
     c.execute("""SELECT m.month_num, m.month_name, SUM(m.target) total_target, SUM(m.actual) total_actual
         FROM revenue_monthly m JOIN revenue_projects p ON m.project_id=p.project_id
         WHERE p.is_active=1 AND p.tahun=%s GROUP BY m.month_num, m.month_name ORDER BY m.month_num""", (cur_year,))
-    monthly_trend = [_norm(dict(r)) for r in c.fetchall()]
+    monthly_trend_rows = {r['month_num']: _norm(dict(r)) for r in c.fetchall()}
+
+    # Billed per bulan dari tabel invoices (berdasarkan EXTRACT month dari invoice_date)
+    c.execute("""SELECT EXTRACT(MONTH FROM invoice_date)::int AS month_num,
+                        COALESCE(SUM(invoice_amount), 0) AS total_billed
+                 FROM invoices WHERE tahun=%s
+                 GROUP BY month_num ORDER BY month_num""", (cur_year,))
+    for r in c.fetchall():
+        mn = r['month_num']
+        if mn in monthly_trend_rows:
+            monthly_trend_rows[mn]['total_billed'] = float(r['total_billed'] or 0)
+        # bulan yang ada invoice tapi tidak ada di revenue_monthly diabaikan
+
+    monthly_trend = sorted(monthly_trend_rows.values(), key=lambda x: x['month_num'])
 
     c.execute("""SELECT * FROM revenue_projects WHERE status IN ('Critical','At Risk') AND is_active=1 AND tahun=%s
         ORDER BY risk_level DESC, revenue_target DESC LIMIT 10""", (cur_year,))
@@ -1700,11 +1713,16 @@ def revenue_summary_api(
         for r in c.fetchall()
     ]
 
+    c.execute("SELECT COALESCE(SUM(invoice_amount),0) t, COALESCE(SUM(paid_amount),0) p FROM invoices WHERE tahun=%s", (cur_year,))
+    iv = _norm(dict(c.fetchone()))
+    total_billed = float(iv['t'] or 0)
+
     conn.close()
 
     return {
         "cur_year": cur_year, "years": years,
         "total_target": float(tt or 0), "total_actual": float(ta or 0), "ach_pct": ach_pct,
+        "total_billed": total_billed,
         "rec_target": rec_target, "rec_actual": rec_actual,
         "prj_target": prj_target, "prj_actual": prj_actual,
         "by_status": by_status, "total_projects": total_projects,
@@ -1832,6 +1850,26 @@ def revenue_insights_api(tahun: int = Query(0), user: dict = Depends(require_men
     outstanding_count  = int(inv.get('cnt') or 0)
     outstanding_amount = float(inv.get('outstanding') or 0)
 
+    # ── Recurring Behind YTD Target ───────────────────────────────────────────
+    c.execute("""
+        SELECT rp.project_id, rp.product, rp.client, rp.organisasi, rp.pic,
+               rp.revenue_target,
+               ROUND(rp.revenue_target::numeric * %s / 12, 0) AS target_ytd,
+               COALESCE(SUM(i.invoice_amount), 0) AS billed,
+               rp.actual_revenue AS collected,
+               ROUND(rp.revenue_target::numeric * %s / 12, 0) - rp.actual_revenue AS gap_collected,
+               ROUND(rp.revenue_target::numeric * %s / 12, 0) - COALESCE(SUM(i.invoice_amount), 0) AS gap_billed,
+               ROUND(rp.actual_revenue / NULLIF(rp.revenue_target, 0) * 100, 1) AS ach_pct
+        FROM revenue_projects rp
+        LEFT JOIN invoices i ON i.project_id = rp.project_id AND i.tahun = %s
+        WHERE rp.kategori = 'Recurring' AND rp.is_active = 1 AND rp.tahun = %s
+          AND rp.actual_revenue < ROUND(rp.revenue_target::numeric * %s / 12, 0)
+        GROUP BY rp.project_id, rp.product, rp.client, rp.organisasi, rp.pic,
+                 rp.revenue_target, rp.actual_revenue
+        ORDER BY gap_collected DESC
+    """, (cur_month, cur_month, cur_month, cur_year, cur_year, cur_month))
+    recurring_behind = [_norm(dict(r)) for r in c.fetchall()]
+
     conn.close()
     return {
         "cur_year": cur_year, "cur_month": cur_month, "years": years,
@@ -1858,6 +1896,7 @@ def revenue_insights_api(tahun: int = Query(0), user: dict = Depends(require_men
         "at_risk_projects": at_risk_projects,
         "zero_projects": zero_projects, "zero_count": len(zero_projects),
         "top_contributors": top_contributors,
+        "recurring_behind": recurring_behind,
         # Invoice
         "outstanding_count": outstanding_count, "outstanding_amount": outstanding_amount,
     }
@@ -2154,6 +2193,18 @@ def project_update(pid: str, payload: ProjectUpdate, user: dict = Depends(requir
     return {"message": "Proyek berhasil diupdate.", "project_id": pid}
 
 
+@app.patch("/api/v1/revenue/projects/{pid}/status", tags=["Revenue"])
+def project_patch_status(pid: str, payload: dict, user: dict = Depends(require_menu("rev_tracker"))):
+    ps = payload.get("project_status")
+    allowed = ["Active", "On Hold", "Completed", "Failed"]
+    if ps not in allowed:
+        raise HTTPException(422, "Status tidak valid.")
+    conn = get_conn(); c = conn.cursor()
+    c.execute("UPDATE revenue_projects SET project_status=%s WHERE project_id=%s", (ps, pid))
+    conn.commit(); conn.close()
+    return {"ok": True}
+
+
 @app.delete("/api/v1/revenue/projects/{pid}", tags=["Revenue"])
 def project_delete(pid: str, user: dict = Depends(require_admin)):
     conn = get_conn(); c = conn.cursor()
@@ -2208,13 +2259,21 @@ def revenue_won_leads(user: dict = Depends(require_menu("rev_tracker"))):
                EXTRACT(YEAR FROM COALESCE(l.exp_close_date, CURRENT_DATE))::int AS suggested_tahun
         FROM leads l
         LEFT JOIN revenue_projects rp ON rp.notes LIKE '%' || l.lead_id || '%' AND rp.is_active=1
-        WHERE l.stage = 'Won'
+        WHERE l.stage = 'Won' AND COALESCE(l.won_import_excluded, FALSE) = FALSE
         ORDER BY l.updated_at DESC
     """)
     leads = [_norm(dict(r)) for r in c.fetchall()]
     conn.close()
     pending = sum(1 for l in leads if not l['is_imported'])
     return {"leads": leads, "pending": pending}
+
+
+@app.delete("/api/v1/revenue/won-leads/{lead_id}", tags=["Revenue"])
+def exclude_won_lead(lead_id: str, user: dict = Depends(require_menu("rev_tracker"))):
+    conn = get_conn(); c = conn.cursor()
+    c.execute("UPDATE leads SET won_import_excluded=TRUE WHERE lead_id=%s AND stage='Won'", (lead_id,))
+    conn.commit(); conn.close()
+    return {"ok": True}
 
 
 class ImportWonItem(BaseModel):
@@ -4200,6 +4259,10 @@ async def import_revenue(
             except Exception:
                 start_month = None
 
+            # Hapus semua row lama sebelum regenerate — mencegah sisa bulan lama
+            # ketika target_invoice_date berubah (ON CONFLICT tidak menghapus row lama)
+            c.execute("DELETE FROM revenue_monthly WHERE project_id=%s", (project_id,))
+
             if type_lower == 'bulanan' and start_month:
                 num_months = 12 - start_month + 1
                 per_month  = round(rev_target / num_months, 2) if num_months > 0 else 0
@@ -4821,6 +4884,7 @@ def _run_migrations():
     migrations = [
         "ALTER TABLE contacts ADD COLUMN IF NOT EXISTS foto TEXT",
         "ALTER TABLE leads ADD COLUMN IF NOT EXISTS loss_reason TEXT",
+        "ALTER TABLE leads ADD COLUMN IF NOT EXISTS won_import_excluded BOOLEAN DEFAULT FALSE",
         "ALTER TABLE revenue_projects ADD COLUMN IF NOT EXISTS organisasi TEXT",
         "ALTER TABLE revenue_monthly ADD COLUMN IF NOT EXISTS termin_no INTEGER",
         """CREATE TABLE IF NOT EXISTS annual_targets (
@@ -5151,10 +5215,34 @@ def annual_targets_summary(tahun: int = Query(0), user: dict = Depends(require_m
     ytd_ach    = round(ytd_actual / max(ytd_target, 1) * 100, 1) if ytd_target else 0
     ytd_gap    = ytd_target - ytd_actual
 
+    # Realisasi vs Target per Kategori (Project / Recurring)
+    conn2 = get_conn(); c2 = conn2.cursor()
+    c2.execute("""
+        SELECT COALESCE(kategori, 'Lainnya') AS kategori,
+               COALESCE(SUM(revenue_target), 0) AS target,
+               COALESCE(SUM(actual_revenue),  0) AS actual
+        FROM revenue_projects
+        WHERE tahun=%s AND is_active=1 AND deleted_at IS NULL
+          AND project_status IN ('Active','Completed')
+        GROUP BY kategori ORDER BY kategori
+    """, (cur_year,))
+    kat_rows = c2.fetchall()
+    conn2.close()
+
+    kategori_summary = [
+        {
+            "kategori": r["kategori"],
+            "target":   float(r["target"]),
+            "actual":   float(r["actual"]),
+        }
+        for r in kat_rows
+    ]
+
     return {
         "tahun": cur_year, "lobs": lobs, "org_names": org_names,
         "monthly": monthly,
         "lob_summary": lob_summary,
+        "kategori_summary": kategori_summary,
         "grand_target": grand_target,
         "grand_actual": grand_actual,
         "grand_ach": round(grand_actual / max(grand_target, 1) * 100, 1),

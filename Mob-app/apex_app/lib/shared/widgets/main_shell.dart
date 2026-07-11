@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../core/constants/api_constants.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/services/offline_service.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../features/auth/providers/auth_provider.dart';
 
 class MainShell extends ConsumerStatefulWidget {
@@ -249,6 +250,10 @@ class _AppDrawer extends ConsumerWidget {
               _section('Lainnya'),
               _item(context, Icons.format_list_bulleted,'Follow-up Hari Ini','/followup-list', go),
               _item(context, Icons.notifications,      'Notifikasi',         '/notifications', go),
+
+              const Divider(color: AppColors.border, height: 24),
+              _section('Bantuan'),
+              _helpItem(context, Icons.menu_book_outlined, 'Panduan Penggunaan'),
             ]),
           ),
           // Logout
@@ -269,7 +274,7 @@ class _AppDrawer extends ConsumerWidget {
 
   Widget _buildAvatar(Color avatarBg, String nama, String? photoUrl) {
     if (photoUrl != null) {
-      final url = '${ApiConstants.baseUrl.replaceFirst('/api', '')}/api/v1/static/$photoUrl';
+      final url = '${ApiConstants.baseUrl}/v1/static/$photoUrl';
       return CircleAvatar(
         radius: 30,
         backgroundColor: avatarBg.withValues(alpha: 0.2),
@@ -464,6 +469,22 @@ class _AppDrawer extends ConsumerWidget {
     child: Text(label.toUpperCase(),
         style: const TextStyle(color: AppColors.textMuted, fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 1.2)),
   );
+
+  Widget _helpItem(BuildContext context, IconData icon, String label) {
+    return ListTile(
+      dense: true,
+      leading: Icon(icon, color: AppColors.textSecondary, size: 20),
+      title: Text(label, style: const TextStyle(color: AppColors.textPrimary, fontSize: 14)),
+      trailing: const Icon(Icons.open_in_new, color: AppColors.textMuted, size: 14),
+      onTap: () async {
+        Navigator.of(context).pop();
+        final uri = Uri.parse('https://apex.hariman.online/panduan.pdf');
+        if (await canLaunchUrl(uri)) {
+          await launchUrl(uri, mode: LaunchMode.externalApplication);
+        }
+      },
+    );
+  }
 
   Widget _item(BuildContext context, IconData icon, String label, String path, Function(String) go,
       {bool highlight = false}) {

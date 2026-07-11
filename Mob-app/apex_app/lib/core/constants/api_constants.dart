@@ -1,20 +1,9 @@
 class ApiConstants {
   ApiConstants._();
 
-  // Ganti dengan IP server saat deploy ke device fisik
-  // Untuk simulator/emulator lokal gunakan:
-  //   Android emulator: 10.0.2.2
-  //   iOS simulator: 127.0.0.1
-  // static const String baseUrl = 'http://192.168.1.6:8002/api';
-  static const String baseUrl = 'http://localhost:8002/api';
-
-  // Base URL untuk static files (foto, upload) — FastAPI port 8001
-  static String get storageUrl =>
-      baseUrl.replaceFirst(RegExp(r':\d+/api$'), ':8001/storage');
-
-  // Base API URL FastAPI port 8001 — untuk endpoint yang belum ada di proxy 8002
-  static String get fastApiUrl =>
-      baseUrl.replaceFirst(RegExp(r':\d+/api$'), ':8001/api');
+  static const String baseUrl    = 'https://apex.hariman.online/api-proxy';
+  static const String storageUrl = 'https://apex.hariman.online/storage';
+  static const String fastApiUrl = 'https://apex.hariman.online/api-proxy';
 
   // Auth
   static const String login           = '/v1/auth/login';
@@ -57,6 +46,6 @@ class ApiConstants {
   static const String entertainClaims = '/v1/entertain/claims';
 
   // Timeouts
-  static const int connectTimeoutMs = 10000;
-  static const int receiveTimeoutMs = 15000;
+  static const int connectTimeoutMs = 15000;
+  static const int receiveTimeoutMs = 20000;
 }

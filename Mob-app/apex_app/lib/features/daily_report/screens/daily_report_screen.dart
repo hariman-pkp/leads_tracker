@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import '../../../core/network/api_client.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/location_service.dart';
+import '../../auth/providers/auth_provider.dart';
 import '../models/daily_report_model.dart';
 import '../providers/daily_report_provider.dart';
 
@@ -156,7 +158,7 @@ class _CreateReportTabState extends ConsumerState<_CreateReportTab> {
       }
 
       await repo.sendReport(id, lat: lat, lng: lng, address: address);
-      ref.invalidate(reportHistoryProvider);
+      ref.read(reportHistoryProvider.notifier).refresh();
       if (mounted) setState(() => _submitted = true);
     } catch (e) {
       if (mounted) {
@@ -356,60 +358,380 @@ class _CreateReportTabState extends ConsumerState<_CreateReportTab> {
 
 // ── History Tab ───────────────────────────────────────────────────────────────
 
-class _HistoryTab extends ConsumerWidget {
+class _HistoryTab extends ConsumerStatefulWidget {
   const _HistoryTab();
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final history = ref.watch(reportHistoryProvider);
+  ConsumerState<_HistoryTab> createState() => _HistoryTabState();
+}
 
-    return history.when(
-      loading: () => const Center(child: CircularProgressIndicator(color: AppColors.primary)),
-      error: (e, _) => Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.cloud_off, color: AppColors.textMuted, size: 40),
-            const SizedBox(height: 10),
-            Text('$e', style: const TextStyle(color: AppColors.textSecondary, fontSize: 13), textAlign: TextAlign.center),
-            TextButton(
-              onPressed: () => ref.invalidate(reportHistoryProvider),
-              child: const Text('Coba Lagi'),
-            ),
-          ],
-        ),
-      ),
-      data: (list) {
-        if (list.isEmpty) {
-          return const Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.assignment_outlined, color: AppColors.textMuted, size: 48),
-                SizedBox(height: 12),
-                Text(
-                  'Belum ada laporan bulan ini',
-                  style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
-                ),
-              ],
-            ),
-          );
-        }
+class _HistoryTabState extends ConsumerState<_HistoryTab> {
+  final _scrollCtrl = ScrollController();
 
-        return RefreshIndicator(
-          onRefresh: () => ref.refresh(reportHistoryProvider.future),
-          color: AppColors.primary,
-          backgroundColor: AppColors.bg3,
-          child: ListView.separated(
-            padding: const EdgeInsets.all(16),
-            itemCount: list.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 8),
-            itemBuilder: (_, i) => _ReportHistoryCard(report: list[i]),
-          ),
-        );
-      },
+  // Filter state (admin/manager only)
+  List<_UserOption> _users   = [];
+  int?      _selectedUserId;
+  DateTime? _dateFrom;
+  DateTime? _dateTo;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollCtrl.addListener(_onScroll);
+    _loadUsers();
+  }
+
+  @override
+  void dispose() {
+    _scrollCtrl.dispose();
+    super.dispose();
+  }
+
+  bool get _isPrivileged {
+    final user = ref.read(authProvider).user;
+    return user != null && (user.isAdmin || user.isManager);
+  }
+
+  Future<void> _loadUsers() async {
+    if (!_isPrivileged) return;
+    try {
+      final res  = await ApiClient.instance.get('/v1/master/users');
+      final list = res.data as List? ?? [];
+      if (mounted) {
+        setState(() {
+          _users = list
+              .map((e) => _UserOption(
+                    id:   (e['id'] as num).toInt(),
+                    nama: e['nama'] as String? ?? '',
+                  ))
+              .toList();
+        });
+      }
+    } catch (_) {}
+  }
+
+  void _onScroll() {
+    if (_scrollCtrl.position.pixels >=
+        _scrollCtrl.position.maxScrollExtent - 200) {
+      ref.read(reportHistoryProvider.notifier).loadMore();
+    }
+  }
+
+  void _applyFilter() {
+    ref.read(reportHistoryFilterProvider.notifier).state = ReportHistoryFilter(
+      userId:   _selectedUserId,
+      dateFrom: _dateFrom,
+      dateTo:   _dateTo,
     );
   }
+
+  void _resetFilter() {
+    setState(() {
+      _selectedUserId = null;
+      _dateFrom = null;
+      _dateTo   = null;
+    });
+    ref.read(reportHistoryFilterProvider.notifier).state = const ReportHistoryFilter();
+  }
+
+  Future<void> _pickDateRange() async {
+    final now = DateTime.now();
+    final picked = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(now.year - 2),
+      lastDate: now,
+      initialDateRange: (_dateFrom != null && _dateTo != null)
+          ? DateTimeRange(start: _dateFrom!, end: _dateTo!)
+          : null,
+      builder: (ctx, child) => Theme(
+        data: Theme.of(ctx).copyWith(
+          colorScheme: const ColorScheme.dark(
+            primary: AppColors.primary,
+            onPrimary: Colors.white,
+            surface: Color(0xFF1E2D45),
+            onSurface: AppColors.textPrimary,
+          ),
+        ),
+        child: child!,
+      ),
+    );
+    if (picked != null) {
+      setState(() {
+        _dateFrom = picked.start;
+        _dateTo   = picked.end;
+      });
+      _applyFilter();
+    }
+  }
+
+  bool get _hasFilter =>
+      _selectedUserId != null || _dateFrom != null || _dateTo != null;
+
+  @override
+  Widget build(BuildContext context) {
+    final history = ref.watch(reportHistoryProvider);
+
+    return Column(
+      children: [
+        // ── Filter Bar (admin/manager only) ──────────────────────────
+        if (_isPrivileged)
+          Container(
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+            color: AppColors.bg2,
+            child: Row(
+              children: [
+                // User dropdown
+                Expanded(
+                  child: GestureDetector(
+                    onTap: _showUserPicker,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: AppColors.bg3,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: _selectedUserId != null
+                              ? AppColors.primary
+                              : AppColors.border,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.person_outline,
+                              size: 14, color: AppColors.textMuted),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              _selectedUserId != null
+                                  ? (_users.firstWhere(
+                                          (u) => u.id == _selectedUserId,
+                                          orElse: () =>
+                                              _UserOption(id: 0, nama: '—'))
+                                      .nama)
+                                  : 'Semua User',
+                              style: TextStyle(
+                                color: _selectedUserId != null
+                                    ? AppColors.primary
+                                    : AppColors.textSecondary,
+                                fontSize: 12,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const Icon(Icons.expand_more,
+                              size: 14, color: AppColors.textMuted),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                // Date range
+                Expanded(
+                  child: GestureDetector(
+                    onTap: _pickDateRange,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: AppColors.bg3,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: _dateFrom != null
+                              ? AppColors.primary
+                              : AppColors.border,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.date_range,
+                              size: 14, color: AppColors.textMuted),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              _dateFrom != null && _dateTo != null
+                                  ? '${_fmt(_dateFrom!)} – ${_fmt(_dateTo!)}'
+                                  : 'Semua Tanggal',
+                              style: TextStyle(
+                                color: _dateFrom != null
+                                    ? AppColors.primary
+                                    : AppColors.textSecondary,
+                                fontSize: 12,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                // Reset
+                if (_hasFilter) ...[
+                  const SizedBox(width: 6),
+                  GestureDetector(
+                    onTap: _resetFilter,
+                    child: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: AppColors.danger.withAlpha(20),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: AppColors.danger.withAlpha(60)),
+                      ),
+                      child: const Icon(Icons.close,
+                          size: 14, color: AppColors.danger),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+
+        // ── List ────────────────────────────────────────────────────
+        Expanded(
+          child: history.when(
+            loading: () => const Center(
+                child: CircularProgressIndicator(color: AppColors.primary)),
+            error: (e, _) => Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.cloud_off, color: AppColors.textMuted, size: 40),
+                  const SizedBox(height: 10),
+                  Text('$e',
+                      style: const TextStyle(
+                          color: AppColors.textSecondary, fontSize: 13),
+                      textAlign: TextAlign.center),
+                  TextButton(
+                    onPressed: () =>
+                        ref.read(reportHistoryProvider.notifier).refresh(),
+                    child: const Text('Coba Lagi'),
+                  ),
+                ],
+              ),
+            ),
+            data: (s) {
+              if (s.reports.isEmpty) {
+                return const Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.assignment_outlined,
+                          color: AppColors.textMuted, size: 48),
+                      SizedBox(height: 12),
+                      Text(
+                        'Belum ada riwayat laporan',
+                        style: TextStyle(
+                            color: AppColors.textSecondary, fontSize: 13),
+                      ),
+                    ],
+                  ),
+                );
+              }
+
+              return RefreshIndicator(
+                onRefresh: () =>
+                    ref.read(reportHistoryProvider.notifier).refresh(),
+                color: AppColors.primary,
+                backgroundColor: AppColors.bg3,
+                child: ListView.builder(
+                  controller: _scrollCtrl,
+                  padding: const EdgeInsets.all(16),
+                  itemCount: s.reports.length + (s.hasMore ? 1 : 0),
+                  itemBuilder: (_, i) {
+                    if (i == s.reports.length) {
+                      return const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 16),
+                        child: Center(
+                          child: SizedBox(
+                            width: 24, height: 24,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2, color: AppColors.primary),
+                          ),
+                        ),
+                      );
+                    }
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: _ReportHistoryCard(report: s.reports[i]),
+                    );
+                  },
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _showUserPicker() {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: AppColors.bg2,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (_) => Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const SizedBox(height: 8),
+          Container(
+            width: 40, height: 4,
+            decoration: BoxDecoration(
+              color: AppColors.border,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(height: 12),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16),
+            child: Text('Pilih User',
+                style: TextStyle(
+                    color: AppColors.textPrimary,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700)),
+          ),
+          const SizedBox(height: 8),
+          ListTile(
+            title: const Text('Semua User',
+                style: TextStyle(color: AppColors.textPrimary, fontSize: 14)),
+            trailing: _selectedUserId == null
+                ? const Icon(Icons.check, color: AppColors.primary, size: 18)
+                : null,
+            onTap: () {
+              setState(() => _selectedUserId = null);
+              Navigator.pop(context);
+              _applyFilter();
+            },
+          ),
+          ..._users.map((u) => ListTile(
+                title: Text(u.nama,
+                    style: const TextStyle(
+                        color: AppColors.textPrimary, fontSize: 14)),
+                trailing: _selectedUserId == u.id
+                    ? const Icon(Icons.check, color: AppColors.primary, size: 18)
+                    : null,
+                onTap: () {
+                  setState(() => _selectedUserId = u.id);
+                  Navigator.pop(context);
+                  _applyFilter();
+                },
+              )),
+          const SizedBox(height: 16),
+        ],
+      ),
+    );
+  }
+
+  String _fmt(DateTime d) => DateFormat('d MMM', 'id_ID').format(d);
+}
+
+class _UserOption {
+  final int    id;
+  final String nama;
+  const _UserOption({required this.id, required this.nama});
 }
 
 // ── Sub Widgets ───────────────────────────────────────────────────────────────
@@ -602,6 +924,8 @@ class _ReportHistoryCard extends ConsumerWidget {
   }
 
   static DateTime _parseUtc(String s) {
+    // date-only strings like "2026-07-09" — treat as local midnight
+    if (RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(s)) return DateTime.parse(s);
     final normalized = s.endsWith('Z') || s.contains('+') ? s : '${s}Z';
     return DateTime.parse(normalized).toLocal();
   }

@@ -5,7 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import '../../../core/theme/app_colors.dart';
-import '../../../core/network/api_client.dart';
+import '../../../core/constants/api_constants.dart';
 import '../providers/entertain_provider.dart';
 import '../repositories/entertain_repository.dart';
 
@@ -41,7 +41,7 @@ class _EntertainDetailScreenState extends ConsumerState<EntertainDetailScreen> {
           final status    = claim['status'] as String? ?? 'Pending';
           final statusColor = _statusColor(status);
           final fotoUrl  = claim['foto_bukti'] as String?;
-          final apiBase  = ApiClient.instance.dio.options.baseUrl; // 'http://localhost:8002/api'
+          final apiBase  = ApiConstants.baseUrl;
 
           return RefreshIndicator(
             color: AppColors.primary,

@@ -14,15 +14,29 @@ class DailyReportRepository {
     return AutoSummary.fromJson(res.data as Map<String, dynamic>);
   }
 
-  Future<List<DailyReportModel>> fetchReports({String? month}) async {
+  Future<({List<DailyReportModel> reports, int total})> fetchReports({
+    int?      userId,
+    DateTime? dateFrom,
+    DateTime? dateTo,
+    int limit  = 20,
+    int offset = 0,
+  }) async {
     final res = await _api.get(
       ApiConstants.dailyReport,
-      params: {if (month != null) 'month': month, 'limit': 30},
+      params: {
+        if (userId   != null) 'user_id':   userId,
+        if (dateFrom != null) 'date_from': dateFrom.toIso8601String().substring(0, 10),
+        if (dateTo   != null) 'date_to':   dateTo.toIso8601String().substring(0, 10),
+        'limit':  limit,
+        'offset': offset,
+      },
     );
-    final data = res.data as Map<String, dynamic>;
-    return (data['reports'] as List? ?? [])
+    final data    = res.data as Map<String, dynamic>;
+    final reports = (data['reports'] as List? ?? [])
         .map((e) => DailyReportModel.fromJson(e as Map<String, dynamic>))
         .toList();
+    final total = int.tryParse(data['total']?.toString() ?? '0') ?? reports.length;
+    return (reports: reports, total: total);
   }
 
   Future<int> createReport(Map<String, dynamic> data) async {

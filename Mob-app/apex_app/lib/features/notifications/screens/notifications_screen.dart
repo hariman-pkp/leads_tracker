@@ -298,10 +298,7 @@ final _approvalQueueProvider =
     bulan: 0,
     status: 'Pending',
   );
-  final list = data['claims'] as List? ?? [];
-  return list
-      .map((e) => ClaimModel.fromJson(e as Map<String, dynamic>))
-      .toList();
+  return (data['claims'] as List? ?? []).cast<ClaimModel>();
 });
 
 // ignore: must_be_immutable

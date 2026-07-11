@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
@@ -150,7 +151,7 @@ class _PipelineFormScreenState extends ConsumerState<PipelineFormScreen> {
         _emailCtrl.text   = lead.email ?? '';
         _productCtrl.text = lead.product ?? '';
         if (lead.dealValue != null) {
-          _valueCtrl.text = lead.dealValue!.toStringAsFixed(0);
+          _valueCtrl.text = _fmtNumber(lead.dealValue!.toStringAsFixed(0));
         }
         _notesCtrl.text = lead.notes ?? '';
         _stage = _stageOptions.contains(lead.stage) ? lead.stage : _stageOptions.first;
@@ -183,7 +184,7 @@ class _PipelineFormScreenState extends ConsumerState<PipelineFormScreen> {
         if (_emailCtrl.text.isNotEmpty) 'email':    _emailCtrl.text.trim(),
         if (_productCtrl.text.isNotEmpty) 'product': _productCtrl.text.trim(),
         if (_valueCtrl.text.isNotEmpty)
-          'deal_value': double.tryParse(_valueCtrl.text.replaceAll('.', '').replaceAll(',', '')),
+          'deal_value': double.tryParse(_valueCtrl.text.replaceAll('.', '')),
         if (_notesCtrl.text.isNotEmpty) 'last_fu_notes': _notesCtrl.text.trim(),
         if (_tglFu != null) 'tgl_fu': _tglFu!.toIso8601String().substring(0, 10),
         'stage': _stage,
@@ -238,7 +239,7 @@ class _PipelineFormScreenState extends ConsumerState<PipelineFormScreen> {
           _phoneCtrl.text   = lead.phone ?? '';
           _emailCtrl.text   = lead.email ?? '';
           _productCtrl.text = lead.product ?? '';
-          if (lead.dealValue != null) _valueCtrl.text = lead.dealValue!.toStringAsFixed(0);
+          if (lead.dealValue != null) _valueCtrl.text = _fmtNumber(lead.dealValue!.toStringAsFixed(0));
           _notesCtrl.text = lead.notes ?? '';
           _stage = _stageOptions.contains(lead.stage) ? lead.stage : _stageOptions.first;
           if (lead.tglFu != null) {
@@ -369,7 +370,8 @@ class _PipelineFormScreenState extends ConsumerState<PipelineFormScreen> {
               const SizedBox(height: 12),
               _ProductField(controller: _productCtrl),
               const SizedBox(height: 12),
-              _field(_valueCtrl, 'Nilai Deal (Rp)', keyboardType: TextInputType.number),
+              _field(_valueCtrl, 'Nilai Prospect (Rp)', keyboardType: TextInputType.number,
+                  inputFormatters: [_ThousandsSeparatorFormatter()]),
 
               const SizedBox(height: 12),
 
@@ -440,10 +442,12 @@ class _PipelineFormScreenState extends ConsumerState<PipelineFormScreen> {
     String label, {
     bool required = false,
     TextInputType? keyboardType,
+    List<TextInputFormatter>? inputFormatters,
   }) =>
       TextFormField(
         controller: ctrl,
         keyboardType: keyboardType,
+        inputFormatters: inputFormatters,
         style: const TextStyle(color: AppColors.textPrimary, fontSize: 14),
         decoration: InputDecoration(labelText: label),
         validator: required
@@ -539,6 +543,32 @@ class _ProductFieldState extends ConsumerState<_ProductField> {
           ],
         );
       },
+    );
+  }
+}
+
+String _fmtNumber(String raw) {
+  final digits = raw.replaceAll('.', '');
+  if (digits.isEmpty) return '';
+  final n = int.tryParse(digits);
+  if (n == null) return raw;
+  return n.toString().replaceAllMapped(
+    RegExp(r'(\d)(?=(\d{3})+$)'),
+    (m) => '${m[1]}.',
+  );
+}
+
+class _ThousandsSeparatorFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+      TextEditingValue old, TextEditingValue value) {
+    final digits = value.text.replaceAll('.', '');
+    if (digits.isEmpty) return value.copyWith(text: '');
+    if (int.tryParse(digits) == null) return old;
+    final formatted = _fmtNumber(digits);
+    return value.copyWith(
+      text: formatted,
+      selection: TextSelection.collapsed(offset: formatted.length),
     );
   }
 }

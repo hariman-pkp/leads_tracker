@@ -36,8 +36,19 @@ class CheckinRepository {
       if (photoBase64 != null) 'photo_base64': photoBase64,
     });
     final body = res.data as Map<String, dynamic>;
-    return VisitModel.fromJson(
-      body['visit'] as Map<String, dynamic>? ?? body,
+    // Laravel hanya return {message, id} — buat VisitModel minimal dari data yang ada
+    if (body.containsKey('visit')) {
+      return VisitModel.fromJson(body['visit'] as Map<String, dynamic>);
+    }
+    return VisitModel(
+      id:          body['id'] as int? ?? 0,
+      leadId:      leadId,
+      address:     address,
+      latitude:    latitude,
+      longitude:   longitude,
+      type:        'check_in',
+      checkedInAt: DateTime.now().toIso8601String(),
+      notes:       notes,
     );
   }
 

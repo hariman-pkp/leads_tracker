@@ -1,5 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/painting.dart';
+import '../../../core/constants/api_constants.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../../core/network/api_client.dart';
@@ -110,7 +112,18 @@ class AuthNotifier extends StateNotifier<AuthState> {
     );
 
     final photoUrl = res.data['avatar_photo'] as String;
-    final updated  = state.user?.copyWith(avatarPhoto: photoUrl);
+
+    // Evict cached image so Flutter loads the new one
+    final oldPhoto = state.user?.avatarPhoto;
+    if (oldPhoto != null) {
+      final oldUrl = '${ApiConstants.baseUrl}/v1/static/$oldPhoto';
+      imageCache.evict(NetworkImage(oldUrl));
+    }
+    imageCache.evict(NetworkImage(
+      '${ApiConstants.baseUrl}/v1/static/$photoUrl',
+    ));
+
+    final updated = state.user?.copyWith(avatarPhoto: photoUrl);
     if (updated != null) {
       state = state.copyWith(user: updated);
       await SecureStorage.instance.saveUserJson(updated.toJsonString());

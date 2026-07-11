@@ -141,6 +141,18 @@ def init_db():
         c.executemany("INSERT INTO role_menus (role_id, menu_key) VALUES (%s,%s) ON CONFLICT DO NOTHING",
                       [(sales_id, k) for k in sales_menus])
 
+        c.execute("INSERT INTO roles (nama, deskripsi) VALUES (%s,%s) RETURNING id",
+                  ("Officer", "Akses operasional: pipeline, revenue, invoice, entertain"))
+        officer_id = c.fetchone()['id']
+        officer_menus = [
+            "today","schedule","followup","field_activity","daily_report",
+            "dashboard","pipeline","contacts","winloss","insights","heatmap","sales_target","export",
+            "rev_dashboard","rev_insights","rev_tracker","rev_monthly","rev_proj_view","rev_invoice","rev_kpi",
+            "entertain","entertain_claims",
+        ]
+        c.executemany("INSERT INTO role_menus (role_id, menu_key) VALUES (%s,%s) ON CONFLICT DO NOTHING",
+                      [(officer_id, k) for k in officer_menus])
+
     # Seed users jika kosong
     c.execute("SELECT COUNT(*) as cnt FROM users")
     if c.fetchone()['cnt'] == 0:

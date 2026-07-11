@@ -81,7 +81,9 @@ class _CheckinScreenState extends ConsumerState<CheckinScreen> {
     final source = kIsWeb ? ImageSource.gallery : ImageSource.camera;
     final picked = await picker.pickImage(
       source: source,
-      imageQuality: 80,
+      imageQuality: 60,
+      maxWidth:  1280,
+      maxHeight: 1280,
       preferredCameraDevice: CameraDevice.rear,
     );
     if (picked == null) return;

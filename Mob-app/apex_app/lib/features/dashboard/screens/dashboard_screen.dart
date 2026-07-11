@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/network/api_client.dart';
+import '../../../core/constants/api_constants.dart';
 import '../../../core/services/location_tracking_service.dart';
 import '../../../core/utils/date_utils.dart';
 import '../../../features/auth/providers/auth_provider.dart';
@@ -96,7 +97,7 @@ class DashboardScreen extends ConsumerWidget {
                             child: () {
                               final photoUrl = user?.avatarPhoto;
                               if (photoUrl != null) {
-                                final url = 'http://localhost:8002/api/v1/static/$photoUrl';
+                                final url = '${ApiConstants.baseUrl}/v1/static/$photoUrl';
                                 return CircleAvatar(
                                   radius: 20,
                                   backgroundImage: NetworkImage(url),
@@ -1106,7 +1107,7 @@ class _ProfileSheet extends StatelessWidget {
               return CircleAvatar(
                 radius: 28,
                 backgroundImage: NetworkImage(
-                    'http://localhost:8002/api/v1/static/$photoUrl'),
+                    '${ApiConstants.baseUrl}/v1/static/$photoUrl'),
               );
             }
             final avatarBg = user?.resolvedAvatarColor ?? AppColors.primary;

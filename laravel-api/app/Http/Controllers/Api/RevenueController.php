@@ -186,26 +186,29 @@ class RevenueController extends Controller
     // ══════════════════════════════════════════════════════════════════
     public function summary(Request $request)
     {
-        $tahun = (int)$request->query('tahun', now()->year);
+        $tahun    = (int)$request->query('tahun', now()->year);
+        $curMonth = $tahun === (int)now()->year ? (int)now()->month : 12;
 
-        // YTD totals
+        // YTD totals (exclude On Hold & Failed)
         $ytd = DB::selectOne(
             "SELECT COALESCE(SUM(revenue_target),0) as target,
                     COALESCE(SUM(actual_revenue),0)  as actual,
                     COUNT(*) as total_projects
-             FROM revenue_projects WHERE tahun=? AND is_active=1 AND deleted_at IS NULL",
+             FROM revenue_projects WHERE tahun=? AND is_active=1 AND deleted_at IS NULL
+             AND project_status IN ('Active','Completed')",
             [$tahun]
         );
         $ytdTarget = (float)$ytd->target;
         $ytdActual = (float)$ytd->actual;
         $achPct    = $ytdTarget > 0 ? round($ytdActual / $ytdTarget * 100, 1) : 0;
 
-        // By kategori
+        // By kategori (exclude On Hold & Failed)
         $byKat = DB::select(
             "SELECT kategori,
                     COALESCE(SUM(revenue_target),0) as target,
                     COALESCE(SUM(actual_revenue),0)  as actual
              FROM revenue_projects WHERE tahun=? AND is_active=1 AND deleted_at IS NULL
+             AND project_status IN ('Active','Completed')
              GROUP BY kategori",
             [$tahun]
         );
@@ -223,49 +226,236 @@ class RevenueController extends Controller
         $byStatus = [];
         foreach ($statusRows as $r) $byStatus[$r->status] = (int)$r->cnt;
 
-        // Critical / At Risk projects
-        $critical = DB::select(
-            "SELECT project_id, client, product, organisasi, revenue_target, actual_revenue, status, risk_level
-             FROM revenue_projects
-             WHERE tahun=? AND is_active=1 AND deleted_at IS NULL AND (status IN ('Critical','At Risk') OR risk_level='HIGH')
-             ORDER BY revenue_target DESC",
+        // Project status summary
+        $psRows = DB::select(
+            "SELECT project_status, COUNT(*) as cnt,
+                    COALESCE(SUM(revenue_target),0) as target,
+                    COALESCE(SUM(actual_revenue),0)  as actual
+             FROM revenue_projects WHERE tahun=? AND is_active=1 AND deleted_at IS NULL
+             GROUP BY project_status",
             [$tahun]
         );
+        $projectStatusSummary = [];
+        foreach ($psRows as $r) {
+            $projectStatusSummary[$r->project_status] = [
+                'cnt'    => (int)$r->cnt,
+                'target' => (float)$r->target,
+                'actual' => (float)$r->actual,
+            ];
+        }
+
+        // Critical / At Risk projects — deteksi otomatis dari project_status Active/On Hold
+        $critical = DB::select(
+            "WITH ytd_target AS (
+                SELECT rm.project_id,
+                       COALESCE(SUM(CASE WHEN rm.month_num <= :m1 THEN rm.target ELSE 0 END), 0) AS target_ytd
+                FROM revenue_monthly rm
+                JOIN revenue_projects rp ON rp.project_id = rm.project_id
+                WHERE rp.tahun = :yr1 AND rp.is_active = 1 AND rp.deleted_at IS NULL
+                  AND rp.project_status NOT IN ('Failed', 'Completed')
+                GROUP BY rm.project_id
+            ),
+            inv_ytd AS (
+                SELECT project_id,
+                       COALESCE(SUM(invoice_amount), 0) AS billed
+                FROM invoices
+                WHERE tahun = :yr2 AND EXTRACT(MONTH FROM invoice_date)::int <= :m2
+                GROUP BY project_id
+            )
+            SELECT rp.project_id, rp.client, rp.product, rp.organisasi, rp.pic,
+                   rp.revenue_target, rp.actual_revenue, rp.project_status,
+                   COALESCE(yt.target_ytd, 0) AS target_ytd,
+                   COALESCE(iv.billed, 0)      AS billed_ytd,
+                   CASE
+                     WHEN rp.project_status = 'On Hold' THEN 'At Risk'
+                     WHEN COALESCE(yt.target_ytd, 0) = 0 THEN 'Critical'
+                     WHEN COALESCE(iv.billed, 0) = 0 THEN 'Critical'
+                     WHEN COALESCE(iv.billed, 0) / COALESCE(yt.target_ytd, 1) < 0.5 THEN 'Critical'
+                     WHEN COALESCE(iv.billed, 0) / COALESCE(yt.target_ytd, 1) < 0.75 THEN 'At Risk'
+                   END AS risk_label
+            FROM revenue_projects rp
+            LEFT JOIN ytd_target yt ON yt.project_id = rp.project_id
+            LEFT JOIN inv_ytd iv    ON iv.project_id = rp.project_id
+            WHERE rp.tahun = :yr3 AND rp.is_active = 1 AND rp.deleted_at IS NULL
+              AND rp.project_status NOT IN ('Failed', 'Completed')
+              AND (
+                rp.project_status = 'On Hold'
+                OR COALESCE(yt.target_ytd, 0) = 0
+                OR COALESCE(iv.billed, 0) = 0
+                OR COALESCE(iv.billed, 0) / NULLIF(COALESCE(yt.target_ytd, 0), 0) < 0.75
+              )
+            ORDER BY
+              CASE
+                WHEN rp.project_status = 'On Hold' THEN 1
+                WHEN COALESCE(yt.target_ytd, 0) = 0 THEN 0
+                WHEN COALESCE(iv.billed, 0) = 0 THEN 0
+                WHEN COALESCE(iv.billed, 0) / NULLIF(COALESCE(yt.target_ytd, 0), 0) < 0.5 THEN 0
+                ELSE 1
+              END ASC,
+              (COALESCE(iv.billed, 0) - COALESCE(yt.target_ytd, 0)) ASC",
+            ['m1' => $curMonth, 'yr1' => $tahun, 'yr2' => $tahun, 'm2' => $curMonth, 'yr3' => $tahun]
+        );
+
+        // Total billed (YTD — semua invoice tahun ini)
+        $totalBilled = (float)DB::selectOne(
+            "SELECT COALESCE(SUM(invoice_amount),0) as billed FROM invoices WHERE tahun=?",
+            [$tahun]
+        )->billed;
+
+        // Quarter trend
+        $quarterRows = DB::select(
+            "SELECT CEIL(rm.month_num / 3.0)::int AS quarter,
+                    COALESCE(SUM(rm.target),0) as target,
+                    COALESCE(SUM(rm.actual),0) as actual
+             FROM revenue_monthly rm
+             JOIN revenue_projects rp ON rm.project_id=rp.project_id
+             WHERE rp.tahun=? AND rp.is_active=1
+             GROUP BY CEIL(rm.month_num / 3.0)::int ORDER BY quarter",
+            [$tahun]
+        );
+        $quarterTrend = array_map(fn($r) => [
+            'quarter' => 'Q' . $r->quarter,
+            'target'  => (float)$r->target,
+            'actual'  => (float)$r->actual,
+            'ach'     => $r->target > 0 ? round($r->actual / $r->target * 100, 1) : 0,
+        ], $quarterRows);
+
+        // Org breakdown
+        $orgRows = DB::select(
+            "SELECT organisasi,
+                    COALESCE(SUM(revenue_target),0) as target,
+                    COALESCE(SUM(actual_revenue),0)  as actual
+             FROM revenue_projects
+             WHERE tahun=? AND is_active=1 AND deleted_at IS NULL
+               AND project_status != 'Failed'
+             GROUP BY organisasi ORDER BY target DESC",
+            [$tahun]
+        );
+        $orgBreakdown = array_map(fn($r) => [
+            'organisasi' => $r->organisasi,
+            'target'     => (float)$r->target,
+            'actual'     => (float)$r->actual,
+            'ach'        => $r->target > 0 ? round($r->actual / $r->target * 100, 1) : 0,
+        ], $orgRows);
+
+        // Failed per organisasi
+        $failedOrgRows = DB::select(
+            "SELECT organisasi, COUNT(*) as cnt,
+                    COALESCE(SUM(revenue_target),0) as target,
+                    COALESCE(SUM(actual_revenue),0)  as actual
+             FROM revenue_projects
+             WHERE tahun=? AND is_active=1 AND deleted_at IS NULL
+               AND project_status = 'Failed'
+             GROUP BY organisasi ORDER BY target DESC",
+            [$tahun]
+        );
+        $failedByOrg = array_map(fn($r) => [
+            'organisasi' => $r->organisasi,
+            'cnt'        => (int)$r->cnt,
+            'target'     => (float)$r->target,
+            'actual'     => (float)$r->actual,
+            'gap'        => (float)$r->actual - (float)$r->target,
+        ], $failedOrgRows);
+
+        // Recurring behind YTD target — via CTE
+        $recurringBehind = DB::select(
+            "WITH monthly_ytd AS (
+                 SELECT rm.project_id,
+                        COALESCE(SUM(CASE WHEN rm.month_num <= :m1 THEN rm.target ELSE 0 END),0) AS target_ytd,
+                        COALESCE(SUM(CASE WHEN rm.month_num <= :m2 THEN rm.actual ELSE 0 END),0) AS collected
+                 FROM revenue_monthly rm
+                 JOIN revenue_projects rp ON rp.project_id = rm.project_id
+                 WHERE rp.tahun = :yr1 AND rp.is_active = 1 AND rp.kategori = 'Recurring'
+                   AND rp.deleted_at IS NULL AND rp.project_status NOT IN ('On Hold','Failed')
+                 GROUP BY rm.project_id
+             ),
+             inv_ytd AS (
+                 SELECT project_id,
+                        COALESCE(SUM(invoice_amount),0) AS billed,
+                        COALESCE(SUM(paid_amount),0)    AS paid
+                 FROM invoices
+                 WHERE tahun = :yr2 AND EXTRACT(MONTH FROM invoice_date)::int <= :m3
+                 GROUP BY project_id
+             )
+             SELECT rp.project_id, rp.product, rp.client, rp.pic, rp.revenue_target,
+                    m.target_ytd, m.collected,
+                    COALESCE(i.billed,0) AS billed,
+                    COALESCE(i.paid,0)   AS paid
+             FROM revenue_projects rp
+             JOIN monthly_ytd m ON m.project_id = rp.project_id
+             LEFT JOIN inv_ytd i ON i.project_id = rp.project_id
+             WHERE m.collected < m.target_ytd
+             ORDER BY (m.collected - m.target_ytd) ASC",
+            ['m1' => $curMonth, 'm2' => $curMonth, 'm3' => $curMonth,
+             'yr1' => $tahun,   'yr2' => $tahun]
+        );
+        $recurringBehindMapped = array_map(fn($r) => [
+            'project_id'    => $r->project_id,
+            'product'       => $r->product,
+            'client'        => $r->client,
+            'pic'           => $r->pic,
+            'revenue_target'=> (float)$r->revenue_target,
+            'target_ytd'    => (float)$r->target_ytd,
+            'billed'        => (float)$r->billed,
+            'paid'          => (float)$r->paid,
+            'collected'     => (float)$r->collected,
+            'gap_billed'    => (float)$r->billed    - (float)$r->target_ytd,
+            'gap_collected' => (float)$r->collected - (float)$r->target_ytd,
+            'ach_pct'       => (float)$r->target_ytd > 0
+                               ? round((float)$r->collected / (float)$r->target_ytd * 100, 1) : 0,
+        ], $recurringBehind);
 
         // Monthly trend
         $monthly = DB::select(
             "SELECT rm.month_num, MAX(rm.month_name) as month_name,
                     COALESCE(SUM(rm.target),0) as total_target,
-                    COALESCE(SUM(rm.actual),0) as total_actual
+                    COALESCE(SUM(rm.actual),0) as total_actual,
+                    COALESCE(SUM(inv.billed),0) as total_billed
              FROM revenue_monthly rm
              JOIN revenue_projects rp ON rm.project_id=rp.project_id
+             LEFT JOIN (
+                 SELECT EXTRACT(MONTH FROM invoice_date)::int AS month_num,
+                        project_id,
+                        SUM(invoice_amount) as billed
+                 FROM invoices
+                 WHERE tahun=?
+                 GROUP BY EXTRACT(MONTH FROM invoice_date)::int, project_id
+             ) inv ON inv.project_id=rm.project_id AND inv.month_num=rm.month_num
              WHERE rp.tahun=? AND rp.is_active=1
              GROUP BY rm.month_num ORDER BY rm.month_num",
-            [$tahun]
+            [$tahun, $tahun]
         );
 
         return response()->json([
-            'tahun'          => $tahun,
-            'cur_year'       => now()->year,
-            'years'          => $this->years(),
-            'total_target'   => $ytdTarget,
-            'total_actual'   => $ytdActual,
-            'ach_pct'        => $achPct,
-            'total_projects' => (int)$ytd->total_projects,
-            'rec_target'     => $recTarget,
-            'rec_actual'     => $recActual,
-            'prj_target'     => $prjTarget,
-            'prj_actual'     => $prjActual,
-            'by_status'      => $byStatus,
-            'critical'       => array_map(fn($r) => array_merge((array)$r, [
+            'tahun'           => $tahun,
+            'cur_year'        => now()->year,
+            'cur_month'       => $curMonth,
+            'years'           => $this->years(),
+            'total_target'    => $ytdTarget,
+            'total_actual'    => $ytdActual,
+            'total_billed'    => $totalBilled,
+            'ach_pct'         => $achPct,
+            'total_projects'  => (int)$ytd->total_projects,
+            'rec_target'      => $recTarget,
+            'rec_actual'      => $recActual,
+            'prj_target'      => $prjTarget,
+            'prj_actual'      => $prjActual,
+            'by_status'              => $byStatus,
+            'project_status_summary' => $projectStatusSummary,
+            'quarter_trend'   => $quarterTrend,
+            'org_breakdown'   => $orgBreakdown,
+            'failed_by_org'   => $failedByOrg,
+            'recurring_behind'=> $recurringBehindMapped,
+            'critical'        => array_map(fn($r) => array_merge((array)$r, [
                 'revenue_target' => (float)$r->revenue_target,
                 'actual_revenue' => (float)$r->actual_revenue,
             ]), $critical),
-            'monthly_trend'  => array_map(fn($r) => [
+            'monthly_trend'   => array_map(fn($r) => [
                 'month_num'    => (int)$r->month_num,
                 'month_name'   => $r->month_name,
                 'total_target' => (float)$r->total_target,
                 'total_actual' => (float)$r->total_actual,
+                'total_billed' => (float)$r->total_billed,
             ], $monthly),
         ]);
     }
@@ -277,22 +467,24 @@ class RevenueController extends Controller
     {
         $tahun = (int)$request->query('tahun', now()->year);
 
-        // YTD
+        // YTD (exclude On Hold & Failed)
         $ytd = DB::selectOne(
             "SELECT COALESCE(SUM(revenue_target),0) as target,
                     COALESCE(SUM(actual_revenue),0)  as actual
-             FROM revenue_projects WHERE tahun=? AND is_active=1 AND deleted_at IS NULL",
+             FROM revenue_projects WHERE tahun=? AND is_active=1 AND deleted_at IS NULL
+             AND project_status IN ('Active','Completed')",
             [$tahun]
         );
         $achPct = (float)$ytd->target > 0
             ? round((float)$ytd->actual / (float)$ytd->target * 100, 1) : 0;
 
-        // By kategori
+        // By kategori (exclude On Hold & Failed)
         $byKat = DB::select(
             "SELECT kategori,
                     COALESCE(SUM(revenue_target),0) as target,
                     COALESCE(SUM(actual_revenue),0)  as actual
              FROM revenue_projects WHERE tahun=? AND is_active=1 AND deleted_at IS NULL
+             AND project_status IN ('Active','Completed')
              GROUP BY kategori",
             [$tahun]
         );
@@ -307,12 +499,13 @@ class RevenueController extends Controller
         $projectAch   = $projTarget  > 0 ? round($projActual  / $projTarget  * 100, 1) : 0;
         $recurringAch = $recurTarget > 0 ? round($recurActual / $recurTarget * 100, 1) : 0;
 
-        // By organisasi
+        // By organisasi (exclude On Hold & Failed)
         $byOwner = DB::select(
             "SELECT organisasi,
                     COALESCE(SUM(revenue_target),0) as target,
                     COALESCE(SUM(actual_revenue),0)  as actual
              FROM revenue_projects WHERE tahun=? AND is_active=1 AND deleted_at IS NULL
+             AND project_status IN ('Active','Completed')
              GROUP BY organisasi",
             [$tahun]
         );
@@ -336,6 +529,7 @@ class RevenueController extends Controller
         $zeroProjects = DB::select(
             "SELECT project_id, client, product, organisasi, revenue_target, type, risk_level
              FROM revenue_projects WHERE tahun=? AND is_active=1 AND deleted_at IS NULL AND actual_revenue=0
+               AND project_status NOT IN ('Failed', 'Completed')
              ORDER BY revenue_target DESC",
             [$tahun]
         );
@@ -514,7 +708,10 @@ class RevenueController extends Controller
         $owner    = $request->query('organisasi', '');
         $kategori = $request->query('kategori', '');
         $status   = $request->query('status', '');
+        $psFilter = $request->query('project_status', '');
         $search   = $request->query('search', '');
+        $page     = max(1, (int)$request->query('page', 1));
+        $perPage  = max(1, min(100, (int)$request->query('per_page', 10)));
 
         $where  = ['tahun = ?', 'is_active = 1', 'deleted_at IS NULL'];
         $params = [$tahun];
@@ -522,27 +719,47 @@ class RevenueController extends Controller
         if ($owner)    { $where[] = 'organisasi = ?';    $params[] = $owner; }
         if ($kategori) { $where[] = 'kategori = ?'; $params[] = $kategori; }
         if ($status)   { $where[] = 'status = ?';   $params[] = $status; }
+        if ($psFilter) { $where[] = 'project_status = ?'; $params[] = $psFilter; }
         if ($search) {
             $s = '%' . strtolower($search) . '%';
             $where[]  = "(LOWER(client) LIKE ? OR LOWER(product) LIKE ?)";
             $params[] = $s; $params[] = $s;
         }
 
+        $whereClause = implode(' AND ', $where);
+
+        // Count total untuk pagination
+        $total      = DB::selectOne("SELECT COUNT(*) as n FROM revenue_projects WHERE $whereClause", $params)->n;
+        $totalPages = (int)ceil($total / $perPage);
+        $offset     = ($page - 1) * $perPage;
+
         $rows = DB::select(
             "SELECT project_id, lob, organisasi, product, client, kategori, type,
                     target_invoice_date,
-                    revenue_target, actual_revenue, achievement_pct, status, risk_level, notes
-             FROM revenue_projects WHERE " . implode(' AND ', $where) . " ORDER BY project_id",
-            $params
+                    revenue_target, actual_revenue, achievement_pct, status, risk_level, notes,
+                    project_status
+             FROM revenue_projects WHERE $whereClause ORDER BY project_id
+             LIMIT ? OFFSET ?",
+            array_merge($params, [$perPage, $offset])
         );
 
-        // Totals (semua, tanpa filter search/organisasi/kategori)
+        // Totals (semua, tanpa filter search/organisasi/kategori; exclude On Hold & Failed)
         $totals = DB::selectOne(
             "SELECT COALESCE(SUM(revenue_target),0) as target,
                     COALESCE(SUM(actual_revenue),0)  as actual
-             FROM revenue_projects WHERE tahun=? AND is_active=1 AND deleted_at IS NULL",
+             FROM revenue_projects WHERE tahun=? AND is_active=1 AND deleted_at IS NULL
+             AND project_status IN ('Active','Completed')",
             [$tahun]
         );
+
+        // Project status counts
+        $psCountRows = DB::select(
+            "SELECT project_status, COUNT(*) as cnt FROM revenue_projects
+             WHERE tahun=? AND is_active=1 AND deleted_at IS NULL GROUP BY project_status",
+            [$tahun]
+        );
+        $projectStatusCounts = [];
+        foreach ($psCountRows as $r) $projectStatusCounts[$r->project_status] = (int)$r->cnt;
         $achPct = (float)$totals->target > 0
             ? round((float)$totals->actual / (float)$totals->target * 100, 1) : 0;
 
@@ -640,7 +857,11 @@ class RevenueController extends Controller
             'cur_year'       => now()->year,
             'years'          => $this->years(),
             'owners'         => $owners,
-            'total_projects' => count($rows),
+            'total'          => (int)$total,
+            'total_pages'    => $totalPages,
+            'page'           => $page,
+            'per_page'       => $perPage,
+            'total_projects' => (int)$total,
             'total_target'   => (float)$totals->target,
             'total_actual'   => (float)$totals->actual,
             'ach_pct'        => $achPct,
@@ -656,6 +877,7 @@ class RevenueController extends Controller
                 'collection_rate'     => (float)$invSummary->total_amount > 0
                     ? round((float)$invSummary->total_paid / (float)$invSummary->total_amount * 100, 1) : 0,
             ],
+            'project_status_counts' => $projectStatusCounts,
             'unpaid_invoices' => array_map(fn($r) => array_merge((array)$r, [
                 'invoice_amount' => (float)$r->invoice_amount,
                 'paid_amount'    => (float)$r->paid_amount,
@@ -726,6 +948,7 @@ class RevenueController extends Controller
                     'status'               => $r->status,
                     'risk_level'           => $r->risk_level,
                     'notes'                => $r->notes,
+                    'project_status'       => $r->project_status ?? 'Active',
                     'inv'                  => $invMap[$r->project_id] ?? null,
                 ];
             }, $rows),
@@ -760,6 +983,22 @@ class RevenueController extends Controller
     }
 
     // ══════════════════════════════════════════════════════════════════
+    // PATCH /api/v1/revenue/projects/{id}/status  — Update project_status
+    // ══════════════════════════════════════════════════════════════════
+    public function patchProjectStatus(Request $request, string $id)
+    {
+        $ps = $request->input('project_status');
+        $allowed = ['Active', 'On Hold', 'Completed', 'Failed'];
+        if (!in_array($ps, $allowed)) {
+            return response()->json(['message' => 'Status tidak valid.'], 422);
+        }
+        DB::table('revenue_projects')
+            ->where('project_id', $id)
+            ->update(['project_status' => $ps, 'updated_at' => now()]);
+        return response()->json(['ok' => true]);
+    }
+
+    // ══════════════════════════════════════════════════════════════════
     // PUT /api/v1/revenue/projects/{id}  — Update proyek
     // ══════════════════════════════════════════════════════════════════
     public function updateProject(Request $request, string $id)
@@ -769,7 +1008,7 @@ class RevenueController extends Controller
 
         $allowed = ['lob','organisasi','product','client','kategori','type',
                     'target_invoice_date','tahun',
-                    'revenue_target','actual_revenue','notes'];
+                    'revenue_target','actual_revenue','notes','project_status'];
 
         $d = $request->only($allowed);
         if (isset($d['target_invoice_date']) && empty($d['target_invoice_date'])) {
@@ -885,7 +1124,7 @@ class RevenueController extends Controller
                     rp.status      AS imported_status
              FROM leads l
              LEFT JOIN revenue_projects rp ON rp.lead_id = l.lead_id
-             WHERE l.stage = 'Won'
+             WHERE l.stage = 'Won' AND COALESCE(l.won_import_excluded, FALSE) = FALSE
              ORDER BY l.updated_at DESC"
         );
 
@@ -918,6 +1157,19 @@ class RevenueController extends Controller
             'imported'    => count(array_filter($result, fn($r) =>  $r['is_imported'])),
             'leads'       => $result,
         ]);
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    // DELETE /api/v1/revenue/won-leads/{lead_id}  — Exclude dari daftar
+    // ══════════════════════════════════════════════════════════════════
+    public function excludeWonLead(string $leadId)
+    {
+        DB::table('leads')
+            ->where('lead_id', $leadId)
+            ->where('stage', 'Won')
+            ->update(['won_import_excluded' => true]);
+
+        return response()->json(['ok' => true]);
     }
 
     // ══════════════════════════════════════════════════════════════════
@@ -1045,7 +1297,7 @@ class RevenueController extends Controller
         $monthEnNum = array_flip($monthNumEn);
 
         $invRows = DB::select(
-            "SELECT period,
+            "SELECT EXTRACT(MONTH FROM invoice_date)::int AS month_num,
                     COALESCE(SUM(invoice_amount), 0)  AS total_invoice,
                     COALESCE(SUM(paid_amount), 0)      AS total_paid,
                     COALESCE(SUM(CASE WHEN status != 'Lunas'
@@ -1053,15 +1305,15 @@ class RevenueController extends Controller
                                       ELSE 0 END), 0)  AS outstanding,
                     COUNT(*) AS inv_count
              FROM invoices
-             WHERE tahun = ?
-             GROUP BY period",
+             WHERE tahun = ? AND invoice_date IS NOT NULL
+             GROUP BY EXTRACT(MONTH FROM invoice_date)::int",
             [$tahun]
         );
 
         $invMap = [];
         foreach ($invRows as $r) {
-            $mNum = $monthEnNum[$r->period] ?? null;
-            if ($mNum) {
+            $mNum = (int)$r->month_num;
+            if ($mNum >= 1 && $mNum <= 12) {
                 $invMap[$mNum] = $r;
             }
         }
@@ -1195,13 +1447,16 @@ class RevenueController extends Controller
     // ══════════════════════════════════════════════════════════════════
     public function invoices(Request $request)
     {
-        $tahun     = (int)$request->query('tahun', now()->year);
         $status    = $request->query('status', '');
         $search    = $request->query('search', '');
         $projectId = $request->query('project_id', '');
+        $dateFrom  = $request->query('date_from', '');
+        $dateTo    = $request->query('date_to', '');
+        $page      = max(1, (int)$request->query('page', 1));
+        $perPage   = max(1, min(100, (int)$request->query('per_page', 10)));
 
-        $where  = ['tahun = ?'];
-        $params = [$tahun];
+        $where  = ['1=1'];
+        $params = [];
 
         if ($projectId) {
             $where[]  = 'project_id = ?';
@@ -1214,23 +1469,53 @@ class RevenueController extends Controller
             $where[] = "status != 'Lunas'";
         }
 
+        if ($dateFrom) {
+            $where[]  = 'invoice_date >= ?';
+            $params[] = $dateFrom;
+        }
+
+        if ($dateTo) {
+            $where[]  = 'invoice_date <= ?';
+            $params[] = $dateTo;
+        }
+
         if ($search) {
             $s = '%' . strtolower($search) . '%';
             $where[]  = "(LOWER(client) LIKE ? OR LOWER(invoice_no) LIKE ?)";
             $params[] = $s; $params[] = $s;
         }
 
+        $whereStr = implode(' AND ', $where);
+
+        // Total count untuk pagination
+        $totalCount = (int)DB::selectOne(
+            "SELECT COUNT(*) as cnt FROM invoices WHERE $whereStr", $params
+        )->cnt;
+
+        $totalPages = max(1, (int)ceil($totalCount / $perPage));
+        $offset     = ($page - 1) * $perPage;
+
+        // Sort: belum bayar dulu, lalu invoice_date DESC
         $rows = DB::select(
-            "SELECT * FROM invoices WHERE " . implode(' AND ', $where) . " ORDER BY invoice_date DESC",
-            $params
+            "SELECT * FROM invoices WHERE $whereStr
+             ORDER BY CASE WHEN status != 'Lunas' THEN 0 ELSE 1 END ASC, invoice_date DESC
+             LIMIT ? OFFSET ?",
+            array_merge($params, [$perPage, $offset])
         );
 
-        $totalInvoice = array_sum(array_map(fn($r) => (float)$r->invoice_amount, $rows));
-        $totalPaid    = array_sum(array_map(fn($r) => (float)$r->paid_amount, $rows));
+        // Summary total keseluruhan (semua halaman)
+        $totals = DB::selectOne(
+            "SELECT COALESCE(SUM(invoice_amount),0) as total_invoice,
+                    COALESCE(SUM(paid_amount),0) as total_paid
+             FROM invoices WHERE $whereStr",
+            $params
+        );
+        $totalInvoice = (float)$totals->total_invoice;
+        $totalPaid    = (float)$totals->total_paid;
 
         $revProjects = DB::select(
-            "SELECT project_id, client, product FROM revenue_projects WHERE tahun=? AND is_active=1 AND deleted_at IS NULL ORDER BY project_id",
-            [$tahun]
+            "SELECT project_id, client, product FROM revenue_projects WHERE is_active=1 AND deleted_at IS NULL ORDER BY project_id",
+            []
         );
 
         // Info project yang sedang difilter (untuk header di frontend)
@@ -1255,10 +1540,9 @@ class RevenueController extends Controller
             }
         }
 
-        // Ringkasan invoice untuk project yang difilter (atau semua)
-        $summaryWhere  = ['tahun = ?'];
-        $summaryParams = [$tahun];
-        if ($projectId) { $summaryWhere[] = 'project_id = ?'; $summaryParams[] = $projectId; }
+        // Ringkasan invoice untuk project yang difilter (atau semua) — ikuti filter yang aktif
+        $summaryWhere  = $where;
+        $summaryParams = $params;
         $invSummary = DB::selectOne(
             "SELECT COUNT(*) as total_inv,
                     COALESCE(SUM(invoice_amount),0) as total_amount,
@@ -1271,9 +1555,11 @@ class RevenueController extends Controller
         );
 
         return response()->json([
-            'tahun'         => $tahun,
             'years'         => $this->years(),
-            'total'         => count($rows),
+            'total'         => $totalCount,
+            'total_pages'   => $totalPages,
+            'page'          => $page,
+            'per_page'      => $perPage,
             'total_invoice' => $totalInvoice,
             'total_paid'    => $totalPaid,
             'project_filter'=> $projectId ?: null,
@@ -1440,6 +1726,117 @@ class RevenueController extends Controller
 
     // ══════════════════════════════════════════════════════════════════
     // GET /api/v1/revenue/projects/{id}/monthly
+    // Semua proyek + data bulanan — untuk halaman Project View
+    // ══════════════════════════════════════════════════════════════════
+    public function projectMonthlyView(Request $request)
+    {
+        $tahun      = (int)$request->query('tahun', now()->year);
+        $organisasi = $request->query('organisasi', '');
+        $kategori   = $request->query('kategori', '');
+        $search     = $request->query('search', '');
+        $curYear    = now()->year;
+        $curMonth   = $tahun === $curYear ? (int)now()->month : 12;
+
+        $monthNamesId = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
+
+        $query  = "SELECT project_id, product, client, pic, kategori, organisasi, revenue_target
+                   FROM revenue_projects WHERE is_active = 1 AND tahun = ?";
+        $params = [$tahun];
+        if ($organisasi) { $query .= " AND organisasi = ?"; $params[] = $organisasi; }
+        if ($kategori)   { $query .= " AND kategori = ?";   $params[] = $kategori; }
+        if ($search)     { $query .= " AND (product LIKE ? OR client LIKE ?)"; $params[] = "%$search%"; $params[] = "%$search%"; }
+        $query .= " ORDER BY organisasi, product";
+
+        $projects = DB::select($query, $params);
+
+        if (empty($projects)) {
+            $years = array_column(DB::select("SELECT DISTINCT tahun FROM revenue_projects ORDER BY tahun DESC"), 'tahun');
+            return response()->json([
+                'projects' => [], 'months' => $monthNamesId, 'cur_year' => $tahun,
+                'cur_month' => $curMonth, 'grand_target' => 0, 'grand_actual' => 0,
+                'month_totals' => [], 'years' => $years ?: [$tahun], 'org_list' => [],
+            ]);
+        }
+
+        $pids = array_column($projects, 'project_id');
+        $placeholders = implode(',', array_fill(0, count($pids), '?'));
+        $monthlyRows = DB::select(
+            "SELECT project_id, month_num, COALESCE(target,0) AS target, COALESCE(actual,0) AS actual
+             FROM revenue_monthly WHERE project_id IN ($placeholders) ORDER BY project_id, month_num",
+            $pids
+        );
+
+        $monthlyMap = [];
+        foreach ($monthlyRows as $r) {
+            $monthlyMap[$r->project_id][$r->month_num] = [
+                'target' => (float)$r->target, 'actual' => (float)$r->actual,
+            ];
+        }
+
+        $result = [];
+        foreach ($projects as $p) {
+            $months = [];
+            for ($mn = 1; $mn <= 12; $mn++) {
+                $t = $monthlyMap[$p->project_id][$mn]['target'] ?? 0;
+                $a = $monthlyMap[$p->project_id][$mn]['actual'] ?? 0;
+                $months[] = ['month_num' => $mn, 'target' => $t, 'actual' => $a,
+                             'ach' => $t ? round($a / $t * 100, 1) : 0];
+            }
+            $totalTarget = array_sum(array_column($months, 'target'));
+            $totalActual = array_sum(array_column($months, 'actual'));
+            $result[] = [
+                'project_id'     => $p->project_id,
+                'product'        => $p->product,
+                'client'         => $p->client,
+                'pic'            => $p->pic,
+                'kategori'       => $p->kategori,
+                'organisasi'     => $p->organisasi,
+                'revenue_target' => (float)$p->revenue_target,
+                'months'         => $months,
+                'total_target'   => $totalTarget,
+                'total_actual'   => $totalActual,
+                'total_ach'      => $totalTarget ? round($totalActual / $totalTarget * 100, 1) : 0,
+            ];
+        }
+
+        $monthTotals = [];
+        for ($mn = 1; $mn <= 12; $mn++) {
+            $t = array_sum(array_column(array_column($result, 'months'), $mn - 1, null)[$mn - 1] ?? []);
+            $a = 0;
+            $t = 0;
+            foreach ($result as $p) {
+                $t += $p['months'][$mn - 1]['target'];
+                $a += $p['months'][$mn - 1]['actual'];
+            }
+            $monthTotals[] = [
+                'month_num'  => $mn,
+                'label'      => $monthNamesId[$mn - 1],
+                'target'     => $t, 'actual' => $a,
+                'ach'        => $t ? round($a / $t * 100, 1) : 0,
+                'is_past'    => $mn < $curMonth,
+                'is_current' => $mn === $curMonth,
+            ];
+        }
+
+        $grandTarget = array_sum(array_column($result, 'total_target'));
+        $grandActual = array_sum(array_column($result, 'total_actual'));
+        $years   = array_column(DB::select("SELECT DISTINCT tahun FROM revenue_projects ORDER BY tahun DESC"), 'tahun');
+        $orgList = array_column(DB::select("SELECT DISTINCT organisasi FROM revenue_projects WHERE is_active=1 AND organisasi IS NOT NULL ORDER BY organisasi"), 'organisasi');
+
+        return response()->json([
+            'projects'     => $result,
+            'months'       => $monthNamesId,
+            'month_totals' => $monthTotals,
+            'grand_target' => $grandTarget,
+            'grand_actual' => $grandActual,
+            'grand_ach'    => $grandTarget > 0 ? round($grandActual / $grandTarget * 100, 1) : 0,
+            'cur_year'     => $tahun,
+            'cur_month'    => $curMonth,
+            'years'        => $years,
+            'org_list'     => $orgList,
+        ]);
+    }
+
     // Mengembalikan rincian termin/bulanan dari revenue_monthly (target > 0)
     // ══════════════════════════════════════════════════════════════════
     public function projectMonthly(Request $request, string $id)

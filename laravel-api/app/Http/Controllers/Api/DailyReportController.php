@@ -28,12 +28,14 @@ class DailyReportController extends Controller
     // ── GET /v1/daily-report ──────────────────────────────────────────────
     public function index(Request $request)
     {
-        $auth    = $this->authUser($request);
-        $month   = $request->query('month'); // format: 2026-06
-        $userId  = $request->query('user_id');
-        $status  = $request->query('status');
-        $limit   = (int) $request->query('limit', 30);
-        $offset  = (int) $request->query('offset', 0);
+        $auth     = $this->authUser($request);
+        $month    = $request->query('month'); // format: 2026-06
+        $dateFrom = $request->query('date_from'); // format: 2026-07-01
+        $dateTo   = $request->query('date_to');   // format: 2026-07-31
+        $userId   = $request->query('user_id');
+        $status   = $request->query('status');
+        $limit    = (int) $request->query('limit', 20);
+        $offset   = (int) $request->query('offset', 0);
 
         $where  = ['1=1'];
         $params = [];
@@ -50,6 +52,14 @@ class DailyReportController extends Controller
         if ($month) {
             $where[]  = "TO_CHAR(dr.report_date, 'YYYY-MM') = ?";
             $params[] = $month;
+        }
+        if ($dateFrom) {
+            $where[]  = 'dr.report_date >= ?';
+            $params[] = $dateFrom;
+        }
+        if ($dateTo) {
+            $where[]  = 'dr.report_date <= ?';
+            $params[] = $dateTo;
         }
         if ($status) {
             $where[]  = 'dr.status = ?';

@@ -16,7 +16,7 @@ void callbackDispatcher() {
       const storage = FlutterSecureStorage();
       final token   = await storage.read(key: _tokenKey);
       final baseUrl = await storage.read(key: 'api_base_url') ??
-          'http://localhost:8002/api';
+          'https://apex.hariman.online/api-proxy';
       if (token == null) return Future.value(true);
 
       final permission = await Geolocator.checkPermission();
@@ -69,7 +69,7 @@ class BackgroundLocationImpl {
       _taskName,
       frequency: const Duration(minutes: 15),
       constraints: Constraints(networkType: NetworkType.connected),
-      existingWorkPolicy: ExistingWorkPolicy.replace,
+      existingWorkPolicy: ExistingPeriodicWorkPolicy.replace,
     );
   }
 

@@ -17,14 +17,30 @@ class PipelineListScreen extends ConsumerStatefulWidget {
 }
 
 class _PipelineListScreenState extends ConsumerState<PipelineListScreen> {
-  final _searchCtrl = TextEditingController();
+  final _searchCtrl  = TextEditingController();
+  final _searchFocus = FocusNode();
+  final _scrollCtrl  = ScrollController();
   String _selectedStage = 'Semua';
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollCtrl.addListener(_onScroll);
+  }
 
   @override
   void dispose() {
     _searchCtrl.dispose();
     _searchFocus.dispose();
+    _scrollCtrl.dispose();
     super.dispose();
+  }
+
+  void _onScroll() {
+    if (_scrollCtrl.position.pixels >=
+        _scrollCtrl.position.maxScrollExtent - 200) {
+      ref.read(pipelineListProvider.notifier).loadMore();
+    }
   }
 
   void _onStageSelected(String stage) {
@@ -35,8 +51,6 @@ class _PipelineListScreenState extends ConsumerState<PipelineListScreen> {
     ));
   }
 
-  final _searchFocus = FocusNode();
-
   void _onSearch(String v) {
     ref.read(pipelineFilterProvider.notifier).update((s) => v.isEmpty
         ? s.copyWith(clearSearch: true)
@@ -46,7 +60,7 @@ class _PipelineListScreenState extends ConsumerState<PipelineListScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final leads = ref.watch(pipelineLeadsProvider);
+    final listState = ref.watch(pipelineListProvider);
 
     return Scaffold(
       backgroundColor: AppColors.bg1,
@@ -77,10 +91,10 @@ class _PipelineListScreenState extends ConsumerState<PipelineListScreen> {
                           ),
                         ),
                         Consumer(builder: (_, ref, __) {
-                          final leads = ref.watch(pipelineLeadsProvider);
-                          return leads.maybeWhen(
-                            data: (list) {
-                              final active = list.where(
+                          final ls = ref.watch(pipelineListProvider);
+                          return ls.maybeWhen(
+                            data: (s) {
+                              final active = s.leads.where(
                                 (l) => l.stage != 'Won' && l.stage != 'Lost'
                               ).toList();
                               double total = 0;
@@ -91,7 +105,7 @@ class _PipelineListScreenState extends ConsumerState<PipelineListScreen> {
                               if (total >= 1e9) fmt = 'Rp ${(total/1e9).toStringAsFixed(1)}M';
                               else if (total >= 1e6) fmt = 'Rp ${(total/1e6).toStringAsFixed(0)}Jt';
                               return Text(
-                                '${active.length} leads aktif · $fmt',
+                                '${s.total} leads · $fmt',
                                 style: const TextStyle(
                                   color: AppColors.textSecondary,
                                   fontSize: 12,
@@ -206,7 +220,7 @@ class _PipelineListScreenState extends ConsumerState<PipelineListScreen> {
 
             // ── Lead List ─────────────────────────────────────────────
             Expanded(
-              child: leads.when(
+              child: listState.when(
                 loading: () => const Center(
                   child: CircularProgressIndicator(color: AppColors.primary),
                 ),
@@ -223,13 +237,13 @@ class _PipelineListScreenState extends ConsumerState<PipelineListScreen> {
                       ),
                       const SizedBox(height: 12),
                       TextButton(
-                        onPressed: () => ref.invalidate(pipelineLeadsProvider),
+                        onPressed: () => ref.read(pipelineListProvider.notifier).refresh(),
                         child: const Text('Coba Lagi'),
                       ),
                     ],
                   ),
                 ),
-                data: (list) => list.isEmpty
+                data: (s) => s.leads.isEmpty
                     ? Center(
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
@@ -246,22 +260,42 @@ class _PipelineListScreenState extends ConsumerState<PipelineListScreen> {
                         ),
                       )
                     : RefreshIndicator(
-                        onRefresh: () => ref.refresh(pipelineLeadsProvider.future),
+                        onRefresh: () => ref.read(pipelineListProvider.notifier).refresh(),
                         color: AppColors.primary,
                         backgroundColor: AppColors.bg3,
-                        child: ListView.separated(
+                        child: ListView.builder(
+                          controller: _scrollCtrl,
                           padding: const EdgeInsets.all(16),
-                          itemCount: list.length,
-                          separatorBuilder: (_, __) => const SizedBox(height: 8),
-                          itemBuilder: (_, i) => _SwipeableLeadCard(
-                            lead:  list[i],
-                            onTap: () => context.push('/pipeline/${list[i].leadId}'),
-                            onFu:  () => context.push(
-                              '/pipeline/${list[i].leadId}/followup',
-                              extra: {'nama': list[i].namaCompany},
-                            ),
-                            onEdit: () => context.push('/pipeline/${list[i].leadId}/edit'),
-                          ),
+                          itemCount: s.leads.length + (s.hasMore ? 1 : 0),
+                          itemBuilder: (_, i) {
+                            if (i == s.leads.length) {
+                              return const Padding(
+                                padding: EdgeInsets.symmetric(vertical: 16),
+                                child: Center(
+                                  child: SizedBox(
+                                    width: 24, height: 24,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: AppColors.primary,
+                                    ),
+                                  ),
+                                ),
+                              );
+                            }
+                            final lead = s.leads[i];
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 8),
+                              child: _SwipeableLeadCard(
+                                lead:  lead,
+                                onTap: () => context.push('/pipeline/${lead.leadId}'),
+                                onFu:  () => context.push(
+                                  '/pipeline/${lead.leadId}/followup',
+                                  extra: {'nama': lead.namaCompany},
+                                ),
+                                onEdit: () => context.push('/pipeline/${lead.leadId}/edit'),
+                              ),
+                            );
+                          },
                         ),
                       ),
               ),
@@ -331,7 +365,14 @@ class _LeadCard extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  const SizedBox(height: 3),
+                  const SizedBox(height: 4),
+                  if (lead.product != null && lead.product!.isNotEmpty)
+                    _InfoChip(
+                      label: lead.product!,
+                      icon: '📦',
+                      color: const Color(0xFF0EA5E9),
+                    ),
+                  const SizedBox(height: 4),
                   Text(
                     lead.contactPerson.isNotEmpty
                         ? lead.contactPerson
@@ -343,29 +384,13 @@ class _LeadCard extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  const SizedBox(height: 6),
-                  Row(
-                    children: [
-                      // FU date indicator
-                      if (lead.tglFu != null)
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: fuStatus.color.withAlpha(25),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(
-                            '⏰ ${fuStatus.label}',
-                            style: TextStyle(
-                              color: fuStatus.color,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
+                  if (lead.tglFu != null) ...[
+                    const SizedBox(height: 4),
+                    _InfoChip(
+                      label: '⏰ ${fuStatus.label}',
+                      color: fuStatus.color,
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -429,6 +454,29 @@ class _LeadCard extends StatelessWidget {
     return NumberFormat.currency(
         locale: 'id', symbol: 'Rp ', decimalDigits: 0).format(v);
   }
+}
+
+class _InfoChip extends StatelessWidget {
+  final String label;
+  final String icon;
+  final Color  color;
+  const _InfoChip({required this.label, this.icon = '', required this.color});
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+    decoration: BoxDecoration(
+      color: color.withAlpha(25),
+      borderRadius: BorderRadius.circular(4),
+      border: Border.all(color: color.withAlpha(60)),
+    ),
+    child: Text(
+      icon.isNotEmpty ? '$icon $label' : label,
+      style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.w600),
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+    ),
+  );
 }
 
 class _FuStatus {

@@ -25,6 +25,12 @@ use App\Http\Controllers\Api\ForecastController;
 use App\Http\Controllers\Api\SalesTargetController;
 use App\Http\Controllers\Api\EntertainController;
 use App\Http\Controllers\Api\ProfileController;
+use App\Http\Controllers\Api\AnnualTargetController;
+use App\Http\Controllers\Api\ShareLinkController;
+
+// ── PUBLIC SHARE LINKS (no auth) ──────────────────────────────────────────
+Route::get ('/v1/public/annual-target/{token}',        [ShareLinkController::class, 'checkToken']);
+Route::post('/v1/public/annual-target/{token}/verify', [ShareLinkController::class, 'verifyAnnualTarget']);
 
 // ── AUTH ──────────────────────────────────────────────────────────────────
 Route::post('/v1/auth/login',            [AuthController::class, 'login']);
@@ -112,8 +118,10 @@ Route::middleware('jwt')->group(function () {
          ->middleware('jwt:rev_insights');
     Route::get('/v1/revenue/projects', [RevenueController::class, 'projects'])
          ->middleware('jwt:rev_tracker');
-    Route::get('/v1/revenue/monthly',  [RevenueController::class, 'monthly'])
+    Route::get('/v1/revenue/monthly',         [RevenueController::class, 'monthly'])
          ->middleware('jwt:rev_monthly');
+    Route::get('/v1/revenue/project-monthly', [RevenueController::class, 'projectMonthlyView'])
+         ->middleware('jwt:rev_proj_view');
     Route::get('/v1/revenue/invoices',         [RevenueController::class, 'invoices'])
          ->middleware('jwt:rev_invoice');
     Route::post('/v1/revenue/invoices',        [RevenueController::class, 'storeInvoice'])
@@ -130,6 +138,8 @@ Route::middleware('jwt')->group(function () {
          ->middleware('jwt:rev_tracker');
     Route::delete('/v1/revenue/projects/{id}',        [RevenueController::class, 'deleteProject'])
          ->middleware('jwt:rev_tracker');
+    Route::patch ('/v1/revenue/projects/{id}/status', [RevenueController::class, 'patchProjectStatus'])
+         ->middleware('jwt:rev_tracker');
     Route::post  ('/v1/revenue/projects/{id}/restore', [RevenueController::class, 'restoreProject'])
          ->middleware('jwt:rev_tracker');
     Route::get   ('/v1/revenue/trashed',              [RevenueController::class, 'trashedProjects'])
@@ -140,9 +150,11 @@ Route::middleware('jwt')->group(function () {
          ->middleware('jwt:rev_tracker');
     Route::post('/v1/revenue/monthly/upsert',     [RevenueController::class, 'upsertMonthly'])
          ->middleware('jwt:rev_tracker');
-    Route::get ('/v1/revenue/won-leads',       [RevenueController::class, 'wonLeads'])
+    Route::get   ('/v1/revenue/won-leads',            [RevenueController::class, 'wonLeads'])
          ->middleware('jwt:rev_tracker');
-    Route::post('/v1/revenue/import-won',      [RevenueController::class, 'importWon'])
+    Route::delete('/v1/revenue/won-leads/{lead_id}',  [RevenueController::class, 'excludeWonLead'])
+         ->middleware('jwt:rev_tracker');
+    Route::post  ('/v1/revenue/import-won',           [RevenueController::class, 'importWon'])
          ->middleware('jwt:rev_tracker');
     Route::get('/v1/revenue/kpi',              [RevenueController::class, 'kpi'])
          ->middleware('jwt:rev_kpi');
@@ -261,5 +273,16 @@ Route::middleware('jwt')->group(function () {
     Route::post ('/v1/entertain/claims/{cid}/photo',  [EntertainController::class, 'uploadPhoto']);
     Route::patch('/v1/entertain/claims/{cid}/cancel',  [EntertainController::class, 'cancel']);
     Route::post ('/v1/entertain/claims/{cid}/approve', [EntertainController::class, 'approve']);
+
+    // Share Links (protected)
+    Route::get ('/v1/share-links/annual-target',          [ShareLinkController::class, 'getAnnualTarget'])      ->middleware('jwt:rev_annual_target');
+    Route::post('/v1/share-links/annual-target/generate', [ShareLinkController::class, 'generateAnnualTarget']) ->middleware('jwt:rev_annual_target');
+
+    // Annual Target
+    Route::get ('/v1/annual-targets/orgs',    [AnnualTargetController::class, 'orgs'])       ->middleware('jwt:rev_annual_target');
+    Route::post('/v1/annual-targets/orgs',    [AnnualTargetController::class, 'saveOrgs'])   ->middleware('jwt:rev_annual_target');
+    Route::get ('/v1/annual-targets/summary', [AnnualTargetController::class, 'summary'])    ->middleware('jwt:rev_annual_target');
+    Route::get ('/v1/annual-targets',         [AnnualTargetController::class, 'index'])      ->middleware('jwt:rev_annual_target');
+    Route::post('/v1/annual-targets',         [AnnualTargetController::class, 'save'])       ->middleware('jwt:rev_annual_target');
 
 });

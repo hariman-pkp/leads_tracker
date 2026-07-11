@@ -7,15 +7,22 @@ import '../models/contact_model.dart';
 class ContactsRepository {
   final _api = ApiClient.instance;
 
-  Future<List<ContactModel>> fetchContacts({String? search}) async {
+  Future<({List<ContactModel> contacts, int total})> fetchContacts({
+    String? search,
+    int limit = 20,
+    int offset = 0,
+  }) async {
     final res  = await _api.get(ApiConstants.contacts, params: {
       if (search != null && search.isNotEmpty) 'q': search,
-      'limit': 100,
+      'limit':  limit,
+      'offset': offset,
     });
-    final data = res.data as Map<String, dynamic>;
-    return (data['contacts'] as List? ?? [])
+    final data     = res.data as Map<String, dynamic>;
+    final contacts = (data['contacts'] as List? ?? [])
         .map((e) => ContactModel.fromJson(e as Map<String, dynamic>))
         .toList();
+    final total = int.tryParse(data['total']?.toString() ?? '0') ?? contacts.length;
+    return (contacts: contacts, total: total);
   }
 
   Future<ContactModel> createContact(Map<String, dynamic> data) async {

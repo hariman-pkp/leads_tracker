@@ -19,15 +19,31 @@ class ContactsScreen extends ConsumerStatefulWidget {
 
 class _ContactsScreenState extends ConsumerState<ContactsScreen> {
   final _searchCtrl = TextEditingController();
+  final _scrollCtrl = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollCtrl.addListener(_onScroll);
+  }
 
   @override
   void dispose() {
     _searchCtrl.dispose();
+    _scrollCtrl.dispose();
     super.dispose();
+  }
+
+  void _onScroll() {
+    if (_scrollCtrl.position.pixels >=
+        _scrollCtrl.position.maxScrollExtent - 200) {
+      ref.read(contactsListProvider.notifier).loadMore();
+    }
   }
 
   void _onSearch(String v) {
     ref.read(contactsSearchProvider.notifier).state = v;
+    ref.read(contactsListProvider.notifier).applySearch(v);
     setState(() {});
   }
 
@@ -42,7 +58,7 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
       builder: (_) => _ContactForm(
         onSaved: (data) async {
           await ref.read(contactsRepositoryProvider).createContact(data);
-          ref.invalidate(contactsListProvider);
+          ref.read(contactsListProvider.notifier).refresh();
         },
       ),
     );
@@ -61,7 +77,7 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
         onDelete: () async {
           try {
             await ref.read(contactsRepositoryProvider).deleteContact(contact.id);
-            ref.invalidate(contactsListProvider);
+            ref.read(contactsListProvider.notifier).refresh();
             if (mounted) Navigator.pop(context);
           } catch (e) {
             if (mounted) {
@@ -93,7 +109,7 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
         existing: contact,
         onSaved: (data) async {
           await ref.read(contactsRepositoryProvider).updateContact(contact.id, data);
-          ref.invalidate(contactsListProvider);
+          ref.read(contactsListProvider.notifier).refresh();
         },
       ),
     );
@@ -109,7 +125,7 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
     if (picked == null) return;
     try {
       await ref.read(contactsRepositoryProvider).uploadFoto(contact.id, picked);
-      ref.invalidate(contactsListProvider);
+      ref.read(contactsListProvider.notifier).refresh();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -138,7 +154,7 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final contacts = ref.watch(contactsListProvider);
+    final contactsState = ref.watch(contactsListProvider);
 
     return Scaffold(
       backgroundColor: AppColors.bg1,
@@ -163,16 +179,15 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
                             fontWeight: FontWeight.w700,
                           ),
                         ),
-                        contacts.when(
-                          data: (list) => Text(
-                            '${list.length} kontak tersinkron',
+                        contactsState.maybeWhen(
+                          data: (s) => Text(
+                            '${s.total} kontak',
                             style: const TextStyle(
                               color: AppColors.textSecondary,
                               fontSize: 12,
                             ),
                           ),
-                          loading: () => const SizedBox.shrink(),
-                          error: (e, st) => const SizedBox.shrink(),
+                          orElse: () => const SizedBox.shrink(),
                         ),
                       ],
                     ),
@@ -224,9 +239,9 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
               ),
             ),
 
-            // ── Grid Card ────────────────────────────────────────────────
+            // ── Contact List ─────────────────────────────────────────────
             Expanded(
-              child: contacts.when(
+              child: contactsState.when(
                 loading: () => const Center(
                   child: CircularProgressIndicator(color: AppColors.primary),
                 ),
@@ -243,14 +258,14 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
                       ),
                       const SizedBox(height: 12),
                       TextButton(
-                        onPressed: () => ref.invalidate(contactsListProvider),
+                        onPressed: () => ref.read(contactsListProvider.notifier).refresh(),
                         child: const Text('Coba Lagi'),
                       ),
                     ],
                   ),
                 ),
-                data: (list) {
-                  if (list.isEmpty) {
+                data: (s) {
+                  if (s.contacts.isEmpty) {
                     return Center(
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
@@ -286,14 +301,29 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
                   }
 
                   return RefreshIndicator(
-                    onRefresh: () => ref.refresh(contactsListProvider.future),
+                    onRefresh: () => ref.read(contactsListProvider.notifier).refresh(),
                     color: AppColors.primary,
                     backgroundColor: AppColors.bg3,
                     child: ListView.builder(
+                      controller: _scrollCtrl,
                       padding: const EdgeInsets.fromLTRB(12, 8, 12, 100),
-                      itemCount: list.length,
+                      itemCount: s.contacts.length + (s.hasMore ? 1 : 0),
                       itemBuilder: (context, i) {
-                        final c = list[i];
+                        if (i == s.contacts.length) {
+                          return const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 16),
+                            child: Center(
+                              child: SizedBox(
+                                width: 24, height: 24,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: AppColors.primary,
+                                ),
+                              ),
+                            ),
+                          );
+                        }
+                        final c = s.contacts[i];
                         return Padding(
                           padding: const EdgeInsets.only(bottom: 10),
                           child: _ContactCard(
