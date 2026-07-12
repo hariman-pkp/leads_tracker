@@ -17,7 +17,7 @@
             <span v-if="projectFilter" class="text-primary-400 font-medium">
               {{ data?.project_info?.project_id }} · {{ data?.project_info?.client }}
             </span>
-            <span v-else>{{ data?.total || 0 }} invoice · {{ selectedYear }}</span>
+            <span v-else>{{ data?.total || 0 }} invoice</span>
           </p>
         </div>
       </div>
@@ -148,10 +148,12 @@
           <option value="">Semua Status</option>
           <option>Lunas</option><option>Belum</option>
         </select>
-        <select v-model.number="f.tahun" class="form-select w-24" @change="fetchData">
-          <option v-for="y in data?.years || []" :key="y" :value="y">{{ y }}</option>
-        </select>
-        <button v-if="f.search || f.status" @click="resetFilters" class="btn-ghost btn-sm text-gray-500">
+        <div class="flex items-center gap-2">
+          <input v-model="f.date_from" type="date" class="form-input w-36 text-xs" @change="fetchData" />
+          <span class="text-gray-500 text-xs">s/d</span>
+          <input v-model="f.date_to" type="date" class="form-input w-36 text-xs" @change="fetchData" />
+        </div>
+        <button v-if="f.search || f.status || f.date_from || f.date_to" @click="resetFilters" class="btn-ghost btn-sm text-gray-500">
           <i class="fa-solid fa-xmark" />Reset
         </button>
       </div>
@@ -472,12 +474,12 @@ const months = ['January','February','March','April','May','June',
 const projectFilter = ref((route.query.project as string) || '')
 
 const f = reactive({
-  search : '',
-  status : (route.query.status as string) || '',
-  tahun  : new Date().getFullYear()
+  search    : '',
+  status    : (route.query.status as string) || '',
+  date_from : '',
+  date_to   : '',
 })
 
-const selectedYear = computed(() => f.tahun)
 
 const page    = ref(1)
 const perPage = ref(10)
@@ -485,9 +487,10 @@ const perPage = ref(10)
 const { data, pending, refresh } = await useAsyncData(
   'invoices',
   () => get('/v1/revenue/invoices', {
-    tahun     : f.tahun,
     status    : f.status,
     search    : f.search,
+    date_from : f.date_from || undefined,
+    date_to   : f.date_to   || undefined,
     project_id: projectFilter.value,
     page      : page.value,
     per_page  : perPage.value,
@@ -512,8 +515,10 @@ function clearProjectFilter() {
 }
 
 function resetFilters() {
-  f.search = ''
-  f.status = ''
+  f.search    = ''
+  f.status    = ''
+  f.date_from = ''
+  f.date_to   = ''
   fetchData()
 }
 

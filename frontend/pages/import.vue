@@ -143,7 +143,59 @@
         target-label="Revenue Tracker"
         target-icon="fa-chart-line"
         @done="handleDone"
-      />
+      >
+        <template #info>
+          <div class="mt-4 space-y-3">
+            <!-- Kategori & Tipe -->
+            <div class="p-3 bg-violet-900/20 border border-violet-700/40 rounded-xl text-xs text-violet-300">
+              <div class="flex items-center gap-1.5 mb-2">
+                <i class="fa-solid fa-tags text-violet-400" />
+                <strong>Nilai Kolom Kategori & Tipe</strong>
+              </div>
+              <div class="space-y-1.5">
+                <div class="flex items-start gap-2">
+                  <code class="bg-violet-900/40 px-1.5 py-0.5 rounded text-violet-200 whitespace-nowrap">kategori</code>
+                  <span class="text-violet-400/80">— <code class="text-white">Project</code> atau <code class="text-white">Recurring</code></span>
+                </div>
+                <div class="flex items-start gap-2">
+                  <code class="bg-violet-900/40 px-1.5 py-0.5 rounded text-violet-200 whitespace-nowrap">type</code>
+                  <span class="text-violet-400/80">— <code class="text-white">One Time</code>, <code class="text-white">Termin</code>, <code class="text-white">Bulanan</code>, atau <code class="text-white">Tahunan</code></span>
+                </div>
+              </div>
+            </div>
+            <!-- Format tanggal -->
+            <div class="p-3 bg-blue-900/20 border border-blue-700/40 rounded-xl text-xs text-blue-300">
+              <div class="flex items-center gap-1.5 mb-2">
+                <i class="fa-solid fa-calendar text-blue-400" />
+                <strong>Format Kolom Tanggal</strong>
+              </div>
+              <div class="space-y-1.5">
+                <div class="flex items-start gap-2">
+                  <code class="bg-blue-900/40 px-1.5 py-0.5 rounded text-blue-200 whitespace-nowrap">target_month</code>
+                  <span class="text-blue-400/80">— Bulan target realisasi. Format: <code class="text-white">YYYY-MM-DD</code> <span class="text-blue-400/60">(mis. 2025-06-01)</span></span>
+                </div>
+                <div class="flex items-start gap-2">
+                  <code class="bg-blue-900/40 px-1.5 py-0.5 rounded text-blue-200 whitespace-nowrap">target_invoice_date</code>
+                  <span class="text-blue-400/80">— Tanggal target penerbitan invoice. Format: <code class="text-white">YYYY-MM-DD</code> <span class="text-blue-400/60">(mis. 2025-06-30)</span></span>
+                </div>
+              </div>
+              <p class="mt-2 text-blue-400/60">Sistem juga menerima format lain yang umum (DD/MM/YYYY, MM/DD/YYYY, dsb.) — namun <strong class="text-blue-300">YYYY-MM-DD direkomendasikan</strong> untuk menghindari ambiguitas.</p>
+            </div>
+            <!-- Logika revenue_monthly -->
+            <div class="p-3 bg-emerald-900/20 border border-emerald-700/40 rounded-xl text-xs text-emerald-300">
+              <div class="flex items-center gap-1.5 mb-2">
+                <i class="fa-solid fa-circle-info text-emerald-400" />
+                <strong>Logika Generate Rincian Bulanan (revenue_monthly)</strong>
+              </div>
+              <ul class="space-y-1 text-emerald-400/80 list-none">
+                <li><span class="badge-blue mr-1.5">Bulanan</span>Target dibagi rata dari bulan <code>target_invoice_date</code> s/d Desember</li>
+                <li><span class="badge-purple mr-1.5">Termin / Tahunan</span>Target penuh ditempatkan di bulan <code>target_invoice_date</code></li>
+                <li><span class="badge-yellow mr-1.5">One Time</span>Tidak generate rincian bulanan — realisasi diambil dari invoice</li>
+              </ul>
+            </div>
+          </div>
+        </template>
+      </ImportPanel>
     </div>
 
     <!-- Global result toast -->
@@ -161,14 +213,14 @@
 <script setup lang="ts">
 definePageMeta({ middleware: 'auth' })
 
-const activeTab = ref<'pipeline'|'invoice'|'revenue'>('pipeline')
+const activeTab = ref<'pipeline'|'revenue'|'invoice'>('pipeline')
 const selectedYear = ref(new Date().getFullYear())
 const invoiceTemplateUrl = computed(() => `/v1/import/template/invoice?tahun=${selectedYear.value}`)
 
 const tabs = [
   { key: 'pipeline', label: 'Pipeline',         icon: 'fa-funnel-dollar'        },
+  { key: 'revenue',  label: 'Revenue Project',  icon: 'fa-chart-line'           },
   { key: 'invoice',  label: 'Invoice & Payment', icon: 'fa-file-invoice-dollar' },
-  { key: 'revenue',  label: 'Revenue Projects',  icon: 'fa-chart-line'          },
 ]
 
 const pipelineCols = [

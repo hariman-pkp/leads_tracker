@@ -1,13 +1,14 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
-const FASTAPI = process.env.NUXT_API_TARGET || 'http://localhost:8001'
+const LARAVEL  = process.env.NUXT_API_TARGET  || 'http://localhost:8002'
+const FASTAPI  = process.env.NUXT_STORAGE_TARGET || 'http://localhost:8001'
 
 export default defineNuxtConfig({
   compatibilityDate: '2024-11-01',
   devtools: { enabled: false },
   vite: {
     server: {
-      // Workaround: disable Unix domain socket untuk vite-node di macOS
-      hmr: { protocol: 'ws', host: 'localhost' }
+      hmr: false,
+      allowedHosts: ['apex.hariman.online'],
     }
   },
   modules: [
@@ -16,17 +17,24 @@ export default defineNuxtConfig({
   ],
   runtimeConfig: {
     // Server-side only (tidak dikirim ke browser)
-    apiBaseServer: process.env.NUXT_API_TARGET || 'http://localhost:8001/api',
+    apiBaseServer: `${LARAVEL}/api`,
     public: {
-      // Client-side: relative, Nuxt proxy ke FastAPI
+      // Client-side: relative, Nuxt proxy ke Laravel
       apiBase: '/api-proxy',
     }
   },
   nitro: {
     devProxy: {
-      '/api-proxy': { target: `${FASTAPI}/api`, changeOrigin: true },
-      '/storage':   { target: `${FASTAPI}/storage`, changeOrigin: true },
-      '/laravel-uploads': { target: `${FASTAPI}/laravel-uploads`, changeOrigin: true },
+      '/api-proxy':        { target: `${LARAVEL}/api`,              changeOrigin: true },
+      '/storage':          { target: `${FASTAPI}/storage`,          changeOrigin: true },
+      '/laravel-uploads':  { target: `${FASTAPI}/laravel-uploads`,  changeOrigin: true },
+      '/laravel-public':   { target: LARAVEL,                       changeOrigin: true },
+    },
+    routeRules: {
+      '/api-proxy/**':       { proxy: `${LARAVEL}/api/**` },
+      '/storage/**':         { proxy: `${FASTAPI}/storage/**` },
+      '/laravel-uploads/**': { proxy: `${FASTAPI}/laravel-uploads/**` },
+      '/laravel-public/**':  { proxy: `${LARAVEL}/**` },
     },
   },
   app: {
@@ -37,6 +45,7 @@ export default defineNuxtConfig({
         { name: 'description', content: 'APEX — Achievement & Performance Execution Platform | PT. PKP' },
       ],
       link: [
+        { rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' },
         { rel: 'preconnect', href: 'https://fonts.googleapis.com' },
         { rel: 'stylesheet', href: 'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap' },
         { rel: 'stylesheet', href: 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css' },

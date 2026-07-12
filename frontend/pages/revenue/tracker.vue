@@ -69,10 +69,10 @@
 
       <!-- Invoice -->
       <div class="stat-card">
-        <div class="stat-icon bg-purple-900/40 text-purple-400"><i class="fa-solid fa-file-invoice-dollar" /></div>
+        <div class="stat-icon bg-amber-900/40 text-amber-400"><i class="fa-solid fa-file-invoice-dollar" /></div>
         <div>
-          <div class="stat-value text-xs text-purple-300">{{ fmt.rupiah(inv.total_amount) }}</div>
-          <div class="stat-label">Total Invoiced</div>
+          <div class="stat-value text-xs text-amber-300">{{ fmt.rupiah(inv.total_amount) }}</div>
+          <div class="stat-label">Billed</div>
           <div class="text-xs text-gray-600 mt-0.5">{{ inv.total_inv }} invoice</div>
         </div>
       </div>
@@ -80,7 +80,7 @@
         <div class="stat-icon bg-emerald-900/40 text-emerald-400"><i class="fa-solid fa-circle-check" /></div>
         <div>
           <div class="stat-value text-xs text-emerald-400">{{ fmt.rupiah(inv.total_paid) }}</div>
-          <div class="stat-label">Sudah Dibayar</div>
+          <div class="stat-label">Collected</div>
           <div class="text-xs text-gray-600 mt-0.5">{{ inv.lunas_count }} lunas</div>
         </div>
       </div>
@@ -96,6 +96,38 @@
           <div class="text-xs mt-0.5" :class="inv.outstanding > 0 ? 'text-orange-500/70' : 'text-gray-600'">
             {{ inv.belum_count }} belum lunas
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── PROJECT STATUS CARDS ─────────────────────────────────── -->
+    <div v-if="data" class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+      <div class="stat-card border border-blue-800/40">
+        <div class="stat-icon bg-blue-900/40 text-blue-400"><i class="fa-solid fa-circle-play" /></div>
+        <div>
+          <div class="stat-value text-blue-300">{{ psCounts['Active'] ?? 0 }}</div>
+          <div class="stat-label">Active</div>
+        </div>
+      </div>
+      <div class="stat-card border border-yellow-800/40">
+        <div class="stat-icon bg-yellow-900/40 text-yellow-400"><i class="fa-solid fa-pause-circle" /></div>
+        <div>
+          <div class="stat-value text-yellow-300">{{ psCounts['On Hold'] ?? 0 }}</div>
+          <div class="stat-label">On Hold</div>
+        </div>
+      </div>
+      <div class="stat-card border border-emerald-800/40">
+        <div class="stat-icon bg-emerald-900/40 text-emerald-400"><i class="fa-solid fa-circle-check" /></div>
+        <div>
+          <div class="stat-value text-emerald-300">{{ psCounts['Completed'] ?? 0 }}</div>
+          <div class="stat-label">Completed</div>
+        </div>
+      </div>
+      <div class="stat-card border border-red-800/40">
+        <div class="stat-icon bg-red-900/40 text-red-400"><i class="fa-solid fa-circle-xmark" /></div>
+        <div>
+          <div class="stat-value text-red-300">{{ psCounts['Failed'] ?? 0 }}</div>
+          <div class="stat-label">Failed</div>
         </div>
       </div>
     </div>
@@ -267,6 +299,10 @@
           <option value="">Semua Kategori</option>
           <option>Project</option><option>Recurring</option>
         </select>
+        <select v-model="f.project_status" class="form-select w-32" @change="fetchData">
+          <option value="">Semua Status</option>
+          <option>Active</option><option>On Hold</option><option>Completed</option><option>Failed</option>
+        </select>
         <select v-model="f.status" class="form-select w-32" @change="fetchData">
           <option value="">Semua Status</option>
           <option>On Track</option><option>At Risk</option><option>Critical</option>
@@ -281,11 +317,11 @@
     </div>
 
     <!-- ── PROJECT TABLE ─────────────────────────────────────────── -->
-    <div v-if="pending" class="flex justify-center py-16">
+    <div v-if="pending && !data" class="flex justify-center py-16">
       <i class="fa-solid fa-circle-notch fa-spin text-3xl text-primary-400" />
     </div>
 
-    <div v-else class="card overflow-x-auto">
+    <div v-if="data" class="card overflow-x-auto" :class="pending ? 'opacity-70' : ''">
       <table class="tbl">
         <thead>
           <tr>
@@ -296,9 +332,11 @@
             <th>Type</th>
             <th>Target Invoice</th>
             <th class="text-right">Target</th>
-            <th class="text-right">Realisasi</th>
+            <th class="text-right">Billed</th>
+            <th class="text-right">Collected</th>
             <th>Ach. %</th>
             <th>Status</th>
+            <th>Project Status</th>
             <th>Risk</th>
             <th class="text-center">Invoice</th>
             <th class="text-center w-14">Aksi</th>
@@ -307,7 +345,10 @@
         <tbody>
           <template v-for="p in data?.projects" :key="p.project_id">
             <!-- ── Main Project Row ── -->
-            <tr :class="expandedProjects.has(p.project_id) ? 'bg-navy-800/60' : ''">
+            <tr :class="[
+              expandedProjects.has(p.project_id) ? 'bg-navy-800/60' : '',
+              (['On Hold','Failed'].includes(p.project_status)) ? 'opacity-60' : ''
+            ]">
               <td>
                 <div class="text-xs font-medium text-gray-200">{{ p.project_id }}</div>
                 <div class="text-xs text-gray-500 max-w-32 truncate">{{ p.product }}</div>
@@ -348,6 +389,7 @@
                 <span v-else class="text-xs text-gray-600">—</span>
               </td>
               <td class="text-right text-xs text-gray-300">{{ fmt.rupiah(p.revenue_target) }}</td>
+              <td class="text-right text-xs text-amber-300 font-medium">{{ fmt.rupiah(p.inv?.total_amount ?? 0) }}</td>
               <td class="text-right text-xs text-emerald-300 font-medium">{{ fmt.rupiah(p.invoice_actual) }}</td>
               <td class="w-28">
                 <!-- Bulanan/Termin: pakai YTD achievement s.d. bulan berjalan -->
@@ -367,6 +409,22 @@
                 </div>
               </td>
               <td><span :class="fmt.statusClass(p.status)">{{ p.status }}</span></td>
+              <td @click.stop>
+                <select :value="p.project_status"
+                        @change="updateProjectStatus(p.project_id, ($event.target as HTMLSelectElement).value)"
+                        class="text-xs rounded px-1.5 py-0.5 border cursor-pointer"
+                        :class="{
+                          'bg-blue-900/40 border-blue-700 text-blue-300': p.project_status === 'Active',
+                          'bg-yellow-900/40 border-yellow-700 text-yellow-300': p.project_status === 'On Hold',
+                          'bg-emerald-900/40 border-emerald-700 text-emerald-300': p.project_status === 'Completed',
+                          'bg-red-900/40 border-red-700 text-red-300': p.project_status === 'Failed',
+                        }">
+                  <option value="Active">Active</option>
+                  <option value="On Hold">On Hold</option>
+                  <option value="Completed">Completed</option>
+                  <option value="Failed">Failed</option>
+                </select>
+              </td>
               <td><span :class="fmt.riskClass(p.risk_level)">{{ p.risk_level }}</span></td>
               <!-- Invoice cell -->
               <td class="text-center">
@@ -419,7 +477,7 @@
 
             <!-- ── Expand: Detail Termin / Bulanan ── -->
             <tr v-if="expandedProjects.has(p.project_id)" class="bg-navy-900/80">
-              <td colspan="13" class="p-0">
+              <td colspan="14" class="p-0">
                 <div class="mx-4 my-3">
                   <!-- Loading state -->
                   <div v-if="monthlyLoading.has(p.project_id)" class="flex items-center gap-2 py-4 justify-center">
@@ -920,12 +978,19 @@
                       </span>
                     </div>
                   </div>
-                  <div class="text-right flex-shrink-0">
+                  <div class="text-right flex-shrink-0 flex flex-col items-end gap-1">
                     <div class="text-sm font-bold text-yellow-400">{{ fmt.rupiah(lead.deal_value) }}</div>
                     <div class="text-xs text-gray-500">Deal Value</div>
                     <div v-if="lead.propose_value !== lead.deal_value" class="text-xs text-gray-600 mt-0.5">
                       Propose: {{ fmt.rupiah(lead.propose_value) }}
                     </div>
+                    <!-- Tombol hapus — hanya tab pending -->
+                    <button v-if="importTab==='pending'"
+                            @click.stop="excludeLead(lead.lead_id)"
+                            class="mt-1 text-xs text-red-400 hover:text-red-300 hover:bg-red-900/30 px-2 py-0.5 rounded transition-colors"
+                            title="Hapus dari daftar import">
+                      <i class="fa-solid fa-trash-can mr-1" />Hapus
+                    </button>
                   </div>
                 </div>
               </div>
@@ -1417,14 +1482,9 @@
                 <option>One Time</option><option>Termin</option><option>Bulanan</option><option>Tahunan</option>
               </select>
             </div>
-            <div v-if="editModal.type === 'One Time'">
+            <div>
               <label class="form-label">Target Penerbitan Invoice</label>
               <input v-model="editModal.target_invoice_date" type="month" class="form-input" />
-              <p class="text-xs text-gray-600 mt-1">Bulan target penerbitan invoice</p>
-            </div>
-            <div v-else class="flex items-center gap-2 p-2.5 rounded-lg bg-navy-800 border border-navy-700">
-              <i class="fa-solid fa-circle-info text-gray-600 text-xs" />
-              <p class="text-xs text-gray-600">Target invoice dikelola per {{ editModal.type === 'Termin' ? 'termin' : 'bulan' }} di rincian proyek</p>
             </div>
             <div>
               <label class="form-label">Target Revenue (Rp)</label>
@@ -1447,6 +1507,15 @@
                 <span>&lt;50% → <span class="badge-red">Critical / HIGH–CRITICAL</span></span>
               </div>
             </div>
+            <div>
+              <label class="form-label">Project Status</label>
+              <select v-model="editModal.project_status" class="form-select">
+                <option value="Active">Active</option>
+                <option value="On Hold">On Hold</option>
+                <option value="Completed">Completed</option>
+                <option value="Failed">Failed</option>
+              </select>
+            </div>
             <div class="col-span-2">
               <label class="form-label">Notes</label>
               <textarea v-model="editModal.notes" class="form-textarea h-16" />
@@ -1468,7 +1537,7 @@
 
 <script setup lang="ts">
 definePageMeta({ middleware: 'auth' })
-const { get, post, put, del, getBlob } = useApi()
+const { get, post, put, patch, del, getBlob } = useApi()
 const fmt      = useFormat()
 const authStore = useAuthStore()
 
@@ -1489,7 +1558,7 @@ async function loadOrgList() {
 const isAdmin   = computed(() => authStore.user?.role_id === 1)
 
 const f = reactive({
-  search: '', organisasi: '', kategori: '', status: '',
+  search: '', organisasi: '', kategori: '', status: '', project_status: '',
   tahun: new Date().getFullYear()
 })
 const page    = ref(1)
@@ -1512,6 +1581,9 @@ const unpaidSlice   = computed(() => {
   return all.slice(start, start + unpaidPerPage)
 })
 
+// psCounts — baca langsung dari data.value (triggerRef akan refresh computed ini)
+const psCounts = computed(() => data.value?.project_status_counts ?? {})
+
 // Invoice summary shorthand
 const inv = computed(() => data.value?.inv_summary ?? {
   total_inv: 0, projects_with_inv: 0, total_amount: 0, total_paid: 0,
@@ -1522,9 +1594,39 @@ let debTimer: ReturnType<typeof setTimeout>
 function debouncedFetch() { clearTimeout(debTimer); debTimer = setTimeout(fetchData, 400) }
 async function fetchData() { page.value = 1; await refresh() }
 function resetFilters() {
-  f.search = f.organisasi = f.kategori = f.status = ''
+  f.search = f.organisasi = f.kategori = f.status = f.project_status = ''
   f.tahun = new Date().getFullYear()
   fetchData()
+}
+
+async function updateProjectStatus(projectId: string, newStatus: string) {
+  // Cari project di data.value — data adalah shallowRef dari Nuxt, mutasi butuh triggerRef
+  const project = data.value?.projects?.find((p: any) => p.project_id === projectId)
+  if (!project) return
+  const prevStatus = project.project_status
+
+  // Update langsung di data — UI langsung tampil nilai baru
+  project.project_status = newStatus
+  if (data.value?.project_status_counts) {
+    const counts = data.value.project_status_counts
+    if (prevStatus && counts[prevStatus] > 0) counts[prevStatus]--
+    counts[newStatus] = (counts[newStatus] ?? 0) + 1
+  }
+  triggerRef(data)  // Paksa Vue re-render karena data adalah shallowRef
+
+  try {
+    await patch(`/v1/revenue/projects/${projectId}/status`, { project_status: newStatus })
+  } catch (e: any) {
+    // Rollback jika gagal
+    project.project_status = prevStatus
+    if (data.value?.project_status_counts) {
+      const counts = data.value.project_status_counts
+      if (counts[newStatus] > 0) counts[newStatus]--
+      counts[prevStatus] = (counts[prevStatus] ?? 0) + 1
+    }
+    triggerRef(data)
+    alert('Gagal menyimpan: ' + (e?.data?.message || e?.message || 'unknown error'))
+  }
 }
 
 const showNewForm = ref(false)
@@ -1590,6 +1692,7 @@ const editModal = reactive({
   target_invoice_date: '',
   tahun: new Date().getFullYear(), revenue_target: 0,
   status: 'On Track', risk_level: 'LOW', notes: '',
+  project_status: 'Active',
 })
 
 function openEdit(p: any) {
@@ -1602,7 +1705,7 @@ function openEdit(p: any) {
     project_id          : p.project_id,
     client              : p.client         ?? '',
     product             : p.product        ?? '',
-    organisasi               : p.organisasi          ?? '',
+    organisasi          : p.organisasi     ?? '',
     lob                 : p.lob            ?? '',
     kategori            : p.kategori       ?? 'Project',
     type                : p.type           ?? 'One Time',
@@ -1612,6 +1715,7 @@ function openEdit(p: any) {
     status              : p.status         ?? 'On Track',
     risk_level          : p.risk_level     ?? 'LOW',
     notes               : p.notes          ?? '',
+    project_status      : p.project_status ?? 'Active',
   })
 }
 
@@ -1810,7 +1914,11 @@ async function submitEditTermin() {
     })
     terminModal.show = false
     await refreshMonthly(terminModal.project_id)
-    await refresh() // refresh main table juga (actual_revenue berubah)
+    await refresh()
+  } catch (e: any) {
+    const msg = e?.data?.message || e?.message || 'Gagal menyimpan termin.'
+    alert(`Error: ${msg}`)
+    console.error('submitEditTermin error:', e)
   } finally {
     terminSaving.value = false
   }
@@ -2038,6 +2146,16 @@ async function openImportModal() {
   } catch (e) {
     wonLeads.value = []
   }
+}
+
+async function excludeLead(leadId: string) {
+  try {
+    await del(`/v1/revenue/won-leads/${leadId}`)
+    wonLeads.value = wonLeads.value.filter(l => l.lead_id !== leadId)
+    selectedLeads.value.delete(leadId)
+    selectedLeads.value = new Set(selectedLeads.value)
+    wonPending.value = wonLeads.value.filter(l => !l.is_imported).length
+  } catch (e) {}
 }
 
 async function submitImport() {

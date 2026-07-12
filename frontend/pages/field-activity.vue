@@ -818,17 +818,26 @@ async function loadStats() {
 async function loadMap() {
   mapLoading.value = true
   try {
-    const rows: any[] = await get('/v1/field-activity/map')
-    // Build latest position per user (most recent check-in)
-    const byUser: Record<number, any> = {}
-    for (const r of rows) {
-      if (!byUser[r.user_id] || r.checked_in_at > byUser[r.user_id].checked_in_at) {
-        byUser[r.user_id] = r
+    const res: any = await get('/v1/field-activity/map')
+    // Laravel returns { positions, trails }; legacy FastAPI returned flat array
+    if (res && Array.isArray(res.positions)) {
+      mapData.value = {
+        positions: res.positions.map((r: any) => ({ ...r, is_active: !r.checked_out_at || r.is_active === true || r.is_active === 't' })),
+        trails:    res.trails ?? [],
       }
-    }
-    mapData.value = {
-      positions: Object.values(byUser).map(r => ({ ...r, is_active: !r.checked_out_at })),
-      trails:    rows,
+    } else {
+      // fallback: flat array
+      const rows: any[] = Array.isArray(res) ? res : []
+      const byUser: Record<number, any> = {}
+      for (const r of rows) {
+        if (!byUser[r.user_id] || r.checked_in_at > byUser[r.user_id].checked_in_at) {
+          byUser[r.user_id] = r
+        }
+      }
+      mapData.value = {
+        positions: Object.values(byUser).map(r => ({ ...r, is_active: !r.checked_out_at })),
+        trails:    rows,
+      }
     }
   } catch {}
   finally { mapLoading.value = false }

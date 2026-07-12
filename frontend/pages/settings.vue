@@ -238,6 +238,53 @@
         </div>
       </div>
 
+      <!-- Share Link Annual Target -->
+      <div class="card mb-5">
+        <div class="section-title mb-4">
+          <i class="fa-solid fa-share-nodes mr-1.5 text-primary-400" />Share Link Annual Target
+        </div>
+        <p class="text-xs text-apex-muted mb-4">
+          Generate link publik yang dapat diakses tanpa login. Link dilindungi password.
+          Setiap kali generate, link lama otomatis tidak berlaku.
+        </p>
+
+        <!-- Current link -->
+        <div v-if="shareLink.url" class="mb-4 p-3 bg-primary-900/20 border border-primary-700/40 rounded-lg">
+          <div class="text-xs text-gray-400 mb-1.5">Link aktif:</div>
+          <div class="flex items-center gap-2">
+            <input :value="shareLink.url" readonly
+                   class="form-input text-xs flex-1 text-primary-300 font-mono bg-primary-900/20" />
+            <button @click="copyShareLink" class="btn-secondary btn-sm flex-shrink-0" title="Copy link">
+              <i :class="copied ? 'fa-solid fa-check text-emerald-400' : 'fa-solid fa-copy'" />
+            </button>
+            <a :href="shareLink.url" target="_blank" class="btn-secondary btn-sm flex-shrink-0" title="Buka link">
+              <i class="fa-solid fa-arrow-up-right-from-square" />
+            </a>
+          </div>
+        </div>
+        <div v-else-if="!shareLoading" class="mb-4 text-xs text-gray-500 italic">
+          Belum ada share link yang aktif.
+        </div>
+
+        <!-- Generate form -->
+        <div class="flex flex-wrap gap-2 items-end">
+          <div class="flex-1 min-w-[200px]">
+            <label class="form-label">Password Share Link</label>
+            <input v-model="sharePassword" type="text" class="form-input text-sm"
+                   placeholder="Minimal 4 karakter..." />
+          </div>
+          <button @click="generateShareLink" :disabled="generatingShare || !sharePassword"
+                  class="btn-primary btn-sm">
+            <i :class="generatingShare ? 'fa-solid fa-spinner fa-spin' : 'fa-solid fa-rotate'" />
+            {{ shareLink.url ? 'Generate Ulang' : 'Generate Link' }}
+          </button>
+        </div>
+        <p class="text-[11px] text-gray-600 mt-2">
+          <i class="fa-solid fa-triangle-exclamation text-yellow-500 mr-1" />
+          Generate ulang akan menonaktifkan link lama secara permanen.
+        </p>
+      </div>
+
       <!-- Toast -->
       <Transition name="toast">
         <div v-if="toast.show"
@@ -432,6 +479,50 @@ const tplForm     = reactive({ nama: '', catatan: '', hasil_fu: '', metode_fu: '
 
 const { post: apiPost, del: apiDel } = useApi()
 
+// ── Share Link ────────────────────────────────────────────────────────────
+const shareLink      = reactive({ token: null as string | null, url: null as string | null })
+const sharePassword  = ref('')
+const shareLoading   = ref(false)
+const generatingShare = ref(false)
+const copied         = ref(false)
+
+async function loadShareLink() {
+  shareLoading.value = true
+  try {
+    const res: any = await get('/v1/share-links/annual-target')
+    shareLink.token = res.token
+    shareLink.url   = res.url
+  } catch {}
+  finally { shareLoading.value = false }
+}
+
+async function generateShareLink() {
+  if (!sharePassword.value || sharePassword.value.length < 4) {
+    showToast('Password minimal 4 karakter.', 'error')
+    return
+  }
+  if (shareLink.url && !confirm('Generate ulang akan menonaktifkan link lama. Lanjutkan?')) return
+  generatingShare.value = true
+  try {
+    const res: any = await apiPost('/v1/share-links/annual-target/generate', { password: sharePassword.value })
+    shareLink.token = res.token
+    shareLink.url   = res.url
+    sharePassword.value = ''
+    showToast('Share link berhasil dibuat.')
+  } catch {
+    showToast('Gagal membuat share link.', 'error')
+  } finally {
+    generatingShare.value = false
+  }
+}
+
+async function copyShareLink() {
+  if (!shareLink.url) return
+  await navigator.clipboard.writeText(shareLink.url)
+  copied.value = true
+  setTimeout(() => copied.value = false, 2000)
+}
+
 async function loadFuTemplates() {
   try { fuTemplates.value = await get('/v1/fu-templates') } catch {}
 }
@@ -455,6 +546,7 @@ onMounted(async () => {
   await load()
   loadTileUsage()
   loadFuTemplates()
+  loadShareLink()
 })
 </script>
 

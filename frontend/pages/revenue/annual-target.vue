@@ -16,11 +16,19 @@
         <button v-if="isAdmin" @click="showInputModal = true" class="btn-secondary text-sm">
           <i class="fa-solid fa-pen-to-square" />Input Target
         </button>
+        <button v-if="isAdmin" @click="showShareModal = true" class="btn-secondary text-sm">
+          <i class="fa-solid fa-share-nodes" />Share
+        </button>
       </div>
     </div>
 
     <!-- Summary Cards -->
-    <div v-if="summary" class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+    <div v-if="summary" class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+      <div class="card text-center">
+        <div class="text-xs text-gray-400 mb-1">Target Setahun</div>
+        <div class="text-lg font-bold text-indigo-400">{{ fmt.rupiah(summary.grand_target) }}</div>
+        <div class="text-xs text-gray-500 mt-1">full year {{ selectedYear }}</div>
+      </div>
       <div class="card text-center">
         <div class="text-xs text-gray-400 mb-1">Target YTD</div>
         <div class="text-lg font-bold text-blue-400">{{ fmt.rupiah(summary.ytd_target) }}</div>
@@ -236,8 +244,11 @@
       </div>
     </div>
 
+    <!-- Realisasi vs Target: LOB + Kategori dalam 1 baris -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 mt-6">
+
     <!-- Tabel Realisasi vs Target per LOB -->
-    <div v-if="summary && summary.lob_summary" class="card mt-6 overflow-x-auto">
+    <div v-if="summary && summary.lob_summary" class="card overflow-x-auto">
       <div class="section-title mb-4">Realisasi vs Target per LOB</div>
       <table class="w-full text-sm">
         <thead>
@@ -270,6 +281,78 @@
         </tbody>
       </table>
     </div>
+
+    <!-- Realisasi vs Target per Kategori -->
+    <div v-if="summary?.kategori_summary?.length" class="card overflow-x-auto">
+      <div class="section-title mb-4">Realisasi vs Target per Kategori</div>
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="border-b border-apex-border">
+            <th class="text-left py-2 px-3 text-gray-400">Kategori</th>
+            <th class="text-right py-2 px-3 text-gray-400">Target</th>
+            <th class="text-right py-2 px-3 text-gray-400">Realisasi</th>
+            <th class="text-right py-2 px-3 text-gray-400">Achievement</th>
+            <th class="text-right py-2 px-3 text-gray-400">Gap</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="k in summary.kategori_summary" :key="k.kategori"
+              class="border-b border-apex-border/40 hover:bg-apex-card/40">
+            <td class="py-2 px-3">
+              <span :class="k.kategori === 'Project' ? 'badge-blue' : k.kategori === 'Recurring' ? 'badge-purple' : 'badge-gray'">
+                {{ k.kategori }}
+              </span>
+            </td>
+            <td class="py-2 px-3 text-right text-blue-300">{{ fmt.rupiah(k.target) }}</td>
+            <td class="py-2 px-3 text-right text-emerald-400">{{ fmt.rupiah(k.actual) }}</td>
+            <td class="py-2 px-3 text-right">
+              <span :class="achClassNum(k.actual, k.target)">
+                {{ k.target > 0 ? (k.actual / k.target * 100).toFixed(1) : '0.0' }}%
+              </span>
+            </td>
+            <td class="py-2 px-3 text-right" :class="(k.target - k.actual) <= 0 ? 'text-emerald-400' : 'text-red-400'">
+              {{ fmt.rupiah(Math.abs(k.target - k.actual)) }}
+              <span class="text-xs ml-1">{{ (k.target - k.actual) <= 0 ? '▲' : '▼' }}</span>
+            </td>
+          </tr>
+          <!-- Total row -->
+          <tr class="border-t-2 border-apex-border bg-apex-card/60 font-semibold text-sm">
+            <td class="py-2 px-3 text-gray-300">Total</td>
+            <td class="py-2 px-3 text-right text-blue-300">
+              {{ fmt.rupiah(summary.kategori_summary.reduce((s: number, k: any) => s + k.target, 0)) }}
+            </td>
+            <td class="py-2 px-3 text-right text-emerald-400">
+              {{ fmt.rupiah(summary.kategori_summary.reduce((s: number, k: any) => s + k.actual, 0)) }}
+            </td>
+            <td class="py-2 px-3 text-right">
+              <span :class="achClassNum(
+                summary.kategori_summary.reduce((s: number, k: any) => s + k.actual, 0),
+                summary.kategori_summary.reduce((s: number, k: any) => s + k.target, 0)
+              )">
+                {{
+                  (() => {
+                    const t = summary.kategori_summary.reduce((s: number, k: any) => s + k.target, 0)
+                    const a = summary.kategori_summary.reduce((s: number, k: any) => s + k.actual, 0)
+                    return t > 0 ? (a / t * 100).toFixed(1) : '0.0'
+                  })()
+                }}%
+              </span>
+            </td>
+            <td class="py-2 px-3 text-right">
+              {{
+                (() => {
+                  const t = summary.kategori_summary.reduce((s: number, k: any) => s + k.target, 0)
+                  const a = summary.kategori_summary.reduce((s: number, k: any) => s + k.actual, 0)
+                  return fmt.rupiah(Math.abs(t - a))
+                })()
+              }}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    </div><!-- end grid LOB + Kategori -->
 
     <!-- Chart Target vs Realisasi bulanan -->
     <div v-if="summary?.monthly" class="card mt-6">
@@ -309,6 +392,59 @@
       </div>
     </div>
 
+    <!-- Share Modal -->
+    <Teleport to="body">
+      <Transition name="modal">
+        <div v-if="showShareModal" class="fixed inset-0 z-50 flex items-center justify-center px-4">
+          <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" @click="showShareModal = false" />
+          <div class="relative bg-apex-surface border border-apex-border rounded-2xl shadow-2xl w-full max-w-md">
+            <div class="flex items-center justify-between px-6 py-4 border-b border-apex-border">
+              <h2 class="text-base font-bold text-apex-text">
+                <i class="fa-solid fa-share-nodes text-primary-400 mr-2" />Share Annual Target
+              </h2>
+              <button @click="showShareModal = false" class="btn-ghost btn-sm rounded-lg">
+                <i class="fa-solid fa-xmark text-lg" />
+              </button>
+            </div>
+            <div class="px-6 py-5 space-y-4">
+              <p class="text-sm text-apex-muted">
+                Buat link publik yang dapat diakses tanpa login, dilindungi password.
+              </p>
+
+              <!-- Current link -->
+              <div v-if="shareInfo.url" class="p-3 bg-primary-900/20 border border-primary-700/40 rounded-lg">
+                <div class="text-xs text-gray-400 mb-1.5">Link aktif:</div>
+                <div class="flex items-center gap-2">
+                  <input :value="shareInfo.url" readonly
+                         class="form-input text-xs flex-1 text-primary-300 font-mono bg-primary-900/20" />
+                  <button @click="copyLink" class="btn-secondary btn-sm flex-shrink-0" title="Copy">
+                    <i :class="linkCopied ? 'fa-solid fa-check text-emerald-400' : 'fa-solid fa-copy'" />
+                  </button>
+                  <a :href="shareInfo.url" target="_blank" class="btn-secondary btn-sm flex-shrink-0">
+                    <i class="fa-solid fa-arrow-up-right-from-square" />
+                  </a>
+                </div>
+              </div>
+
+              <div>
+                <label class="form-label">{{ shareInfo.url ? 'Generate Ulang dengan Password Baru' : 'Password' }}</label>
+                <input v-model="sharePassword" type="text" class="form-input"
+                       placeholder="Minimal 4 karakter..." />
+              </div>
+            </div>
+            <div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-apex-border">
+              <button @click="showShareModal = false" class="btn-secondary text-sm">Tutup</button>
+              <button @click="doGenerateShare" :disabled="generatingShare || sharePassword.length < 4"
+                      class="btn-primary text-sm">
+                <i :class="generatingShare ? 'fa-solid fa-spinner fa-spin' : 'fa-solid fa-rotate'" />
+                {{ shareInfo.url ? 'Generate Ulang' : 'Generate Link' }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+
     <!-- Toast -->
     <Transition name="toast">
       <div v-if="toast.show"
@@ -335,6 +471,7 @@ const MONTHS_ID = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agu
 
 const selectedYear = ref(curYear)
 const showInputModal = ref(false)
+const showShareModal = ref(false)
 const loading        = ref(false)
 const saving         = ref(false)
 const savingOrgs     = ref(false)
@@ -344,6 +481,45 @@ const allOrgs      = ref<{ kode: string; nama: string; selected: boolean }[]>([]
 const grid         = ref<Record<number, Record<string, number>>>({})
 const summary      = ref<any>(null)
 const toast        = reactive({ show: false, msg: '', type: 'success' })
+
+// Share link
+const { post: apiPost } = useApi()
+const shareInfo      = reactive({ token: null as string | null, url: null as string | null })
+const sharePassword  = ref('')
+const generatingShare = ref(false)
+const linkCopied     = ref(false)
+
+async function loadShareInfo() {
+  const { get: apiGet } = useApi()
+  try {
+    const res: any = await apiGet('/v1/share-links/annual-target')
+    shareInfo.token = res.token
+    shareInfo.url   = res.url
+  } catch {}
+}
+
+async function doGenerateShare() {
+  if (sharePassword.value.length < 4) return
+  if (shareInfo.url && !confirm('Generate ulang akan menonaktifkan link lama. Lanjutkan?')) return
+  generatingShare.value = true
+  try {
+    const res: any = await apiPost('/v1/share-links/annual-target/generate', { password: sharePassword.value })
+    shareInfo.token = res.token
+    shareInfo.url   = res.url
+    sharePassword.value = ''
+    showToast('Share link berhasil dibuat.')
+  } catch {
+    showToast('Gagal membuat share link.', 'error')
+  } finally {
+    generatingShare.value = false }
+}
+
+async function copyLink() {
+  if (!shareInfo.url) return
+  await navigator.clipboard.writeText(shareInfo.url)
+  linkCopied.value = true
+  setTimeout(() => linkCopied.value = false, 2000)
+}
 
 function initGrid() {
   const g: Record<number, Record<string, number>> = {}
@@ -550,7 +726,10 @@ const qBarW = computed(() => {
   return Math.min(slotW * 0.32, 40)
 })
 
-onMounted(loadData)
+onMounted(() => {
+  loadData()
+  if (isAdmin.value) loadShareInfo()
+})
 </script>
 
 <style scoped>

@@ -66,17 +66,27 @@
             {{ data.ach_months_count }}/{{ data.past_months_count }} bulan achieve target
           </span>
         </div>
-        <div class="flex items-end gap-1.5 h-36 mb-2">
+        <div class="flex items-end gap-1.5 mb-2" style="height:156px">
           <div v-for="m in data.monthly" :key="m.month_num"
-               class="flex-1 flex flex-col items-center justify-end gap-0.5">
-            <!-- Target bar (ghost) -->
+               class="flex-1 flex flex-col items-center justify-end">
+            <!-- Label ach% di atas bar -->
+            <div class="w-full text-center mb-0.5" style="min-height:18px">
+              <span v-if="m.is_past && Number(m.target) > 0"
+                    class="text-[9px] font-bold leading-none"
+                    :class="Number(m.actual) >= Number(m.target) ? 'text-emerald-400'
+                           : Number(m.actual) >= Number(m.target)*0.8 ? 'text-yellow-400'
+                           : 'text-red-400'">
+                {{ Math.round(Number(m.actual) / Number(m.target) * 100) }}%
+              </span>
+            </div>
+            <!-- Bar area -->
             <div class="w-full relative flex flex-col justify-end" style="height:120px">
               <div class="w-full rounded-t opacity-20 absolute bottom-0"
                    :class="m.is_past ? 'bg-gray-400' : 'bg-gray-700'"
-                   :style="`height:${monthlyMax ? Math.round(m.target/monthlyMax*100) : 0}%`" />
+                   :style="`height:${monthlyMax ? Math.round(Number(m.target)/monthlyMax*100) : 0}%`" />
               <div class="w-full rounded-t absolute bottom-0 transition-all duration-700"
-                   :class="!m.is_past ? 'bg-navy-700' : m.actual >= m.target ? 'bg-emerald-500' : m.actual >= m.target*0.8 ? 'bg-yellow-500' : 'bg-red-500'"
-                   :style="`height:${monthlyMax ? Math.round(m.actual/monthlyMax*100) : 0}%`" />
+                   :class="!m.is_past ? 'bg-navy-700' : Number(m.actual) >= Number(m.target) ? 'bg-emerald-500' : Number(m.actual) >= Number(m.target)*0.8 ? 'bg-yellow-500' : 'bg-red-500'"
+                   :style="`height:${monthlyMax ? Math.round(Number(m.actual)/monthlyMax*100) : 0}%`" />
             </div>
             <div class="text-xs text-gray-600 mt-1">{{ m.month_name.slice(0,3) }}</div>
           </div>
@@ -523,6 +533,55 @@
 
       </template><!-- end v-if="!noData" panel 3 -->
 
+      <!-- ═══════════════════════════════════════════════════════════════
+           PANEL 4 — LANGKAH NYATA & PRIORITAS TERPENTING
+      ════════════════════════════════════════════════════════════════ -->
+      <template v-if="!noData && insights.steps.length">
+      <div class="flex items-center gap-3 mb-4 mt-6">
+        <div class="w-8 h-8 rounded-full bg-cyan-900/60 flex items-center justify-center text-cyan-400 font-bold text-sm flex-shrink-0">4</div>
+        <div>
+          <h2 class="text-base font-bold text-white">Langkah Nyata yang Harus Dilakukan</h2>
+          <p class="text-xs text-gray-500">Diurutkan berdasarkan urgensi — digenerate otomatis dari kondisi data saat ini</p>
+        </div>
+      </div>
+
+      <!-- Prioritas Terpenting -->
+      <div v-if="insights.topPriority" class="mb-4 rounded-lg border border-red-500/40 bg-red-950/30 p-4">
+        <div class="flex items-start gap-3">
+          <div class="mt-0.5 shrink-0 text-red-400 text-lg"><i class="fa-solid fa-circle-exclamation" /></div>
+          <div>
+            <div class="mb-1 text-xs font-bold tracking-widest text-red-400 uppercase">Satu Prioritas Terpenting</div>
+            <div class="text-sm font-semibold text-red-200">{{ insights.topPriority.title }}</div>
+            <div class="mt-1.5 text-xs text-gray-400 leading-relaxed">{{ insights.topPriority.body }}</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Langkah-langkah -->
+      <div class="space-y-2">
+        <div
+          v-for="(step, i) in insights.steps"
+          :key="i"
+          class="flex items-start gap-3 rounded-lg border p-3.5"
+          :class="step.borderClass"
+        >
+          <div class="shrink-0 mt-0.5 w-7 h-7 rounded-full flex items-center justify-center text-sm" :class="step.iconBgClass">
+            <i :class="[step.icon, step.iconClass]" />
+          </div>
+          <div class="min-w-0 flex-1">
+            <div class="flex items-center gap-2 flex-wrap mb-0.5">
+              <span class="text-xs font-bold px-2 py-0.5 rounded-full" :class="step.pillClass">{{ step.period }}</span>
+              <span class="text-sm font-semibold text-gray-100">{{ step.title }}</span>
+            </div>
+            <div class="text-xs text-gray-400 leading-relaxed">{{ step.body }}</div>
+          </div>
+          <div v-if="step.amount" class="shrink-0 text-right ml-2">
+            <span class="text-sm font-bold" :class="step.amountClass">{{ step.amount }}</span>
+          </div>
+        </div>
+      </div>
+      </template><!-- end panel 4 -->
+
     </template>
   </div>
 </template>
@@ -586,6 +645,125 @@ const curTarget = computed(() => {
 const monthlyMax = computed(() =>
   Math.max(...(data.value?.monthly ?? []).map((m: any) => Math.max(Number(m.target), Number(m.actual))), 1)
 )
+
+// ── Langkah Nyata (Panel 4) ───────────────────────────────────────────────────
+const insights = computed(() => {
+  const d = data.value
+  if (!d) return { topPriority: null, steps: [] }
+
+  const f = (n: number) => {
+    if (n >= 1_000_000_000) return `Rp ${(n / 1_000_000_000).toFixed(1)} M`
+    if (n >= 1_000_000)     return `Rp ${Math.round(n / 1_000_000)} jt`
+    return `Rp ${n.toLocaleString('id-ID')}`
+  }
+
+  const totalTarget    = d.total_target    ?? 0
+  const totalActual    = d.total_actual    ?? 0
+  const outstanding    = d.outstanding_amount ?? 0
+  const outCount       = d.outstanding_count  ?? 0
+  const runRate        = d.run_rate        ?? 0
+  const curMonth       = d.cur_month       ?? 1
+  const remainMonths   = 12 - curMonth
+  const neededRate     = remainMonths > 0 ? (totalTarget - totalActual) / remainMonths : 0
+  const zeroProjects   = d.zero_projects   ?? []
+  const recurringBehind = d.recurring_behind ?? []
+
+  const bigTermin    = zeroProjects.filter((p: any) => p.kategori === 'Project')
+  const zeroRecurring = zeroProjects.filter((p: any) => p.kategori === 'Recurring')
+  const bigTerminTotal = bigTermin.reduce((s: number, p: any) => s + Number(p.revenue_target), 0)
+
+  const topPriority = bigTermin.length > 0
+    ? {
+        title: `${bigTermin.length} proyek termin besar senilai ${f(bigTerminTotal)} — semua belum ada realisasi`,
+        body: bigTermin.slice(0, 4).map((p: any) => `${p.project_id} ${p.client} (${f(Number(p.revenue_target))})`).join(' · ')
+          + `. Audit milestone segera — jika 25% saja bisa diinvoice bulan ini = ${f(bigTerminTotal * 0.25)} masuk kas.`,
+      }
+    : null
+
+  const steps: any[] = []
+
+  if (outCount > 0) {
+    steps.push({
+      period: 'Segera',
+      icon: 'fa-solid fa-file-invoice-dollar',
+      iconClass: 'text-red-400', iconBgClass: 'bg-red-950/60',
+      borderClass: 'border-red-500/25 bg-red-950/15',
+      pillClass: 'bg-red-500/20 text-red-300',
+      labelClass: 'text-red-400',
+      title: `Kejar pembayaran ${outCount} invoice outstanding`,
+      body: `Total ${f(outstanding)} invoice sudah terbit tapi belum dibayar. Hubungi Finance klien hari ini — prioritaskan nominal terbesar terlebih dahulu.`,
+      amount: f(outstanding), amountClass: 'text-red-300',
+    })
+  }
+
+  if (zeroRecurring.length > 0) {
+    const recTotal = zeroRecurring.reduce((s: number, p: any) => s + Number(p.revenue_target), 0)
+    steps.push({
+      period: 'Segera',
+      icon: 'fa-solid fa-rotate',
+      iconClass: 'text-amber-400', iconBgClass: 'bg-amber-950/60',
+      borderClass: 'border-amber-500/25 bg-amber-950/15',
+      pillClass: 'bg-amber-500/20 text-amber-300',
+      title: `Terbitkan invoice ${zeroRecurring.length} recurring yang belum pernah ditagihkan`,
+      body: zeroRecurring.slice(0, 4).map((p: any) => `${p.project_id} ${p.client} — ${p.product}`).join(' · ')
+        + (zeroRecurring.length > 4 ? ` + ${zeroRecurring.length - 4} lainnya` : ''),
+      amount: f(recTotal), amountClass: 'text-amber-300',
+    })
+  }
+
+  if (bigTermin.length > 0) {
+    steps.push({
+      period: 'Bulan Ini',
+      icon: 'fa-solid fa-magnifying-glass-chart',
+      iconClass: 'text-orange-400', iconBgClass: 'bg-orange-950/60',
+      borderClass: 'border-orange-500/25 bg-orange-950/15',
+      pillClass: 'bg-orange-500/20 text-orange-300',
+      title: `Audit milestone ${bigTermin.length} proyek termin besar`,
+      body: `Total target ${f(bigTerminTotal)}. Tanyakan tim delivery: deliverable mana yang sudah selesai dan bisa diinvoice? Target: minimal 1 termin per proyek sebelum akhir bulan.`,
+      amount: `Potensi ${f(bigTerminTotal * 0.25)}`, amountClass: 'text-orange-300',
+    })
+  }
+
+  if (recurringBehind.length > 0) {
+    const behindGap = recurringBehind.reduce((s: number, p: any) => s + Number(p.gap_collected ?? 0), 0)
+    steps.push({
+      period: 'Bulan Ini',
+      icon: 'fa-solid fa-arrow-trend-up',
+      iconClass: 'text-cyan-400', iconBgClass: 'bg-cyan-950/60',
+      borderClass: 'border-cyan-500/25 bg-cyan-950/15',
+      pillClass: 'bg-cyan-500/20 text-cyan-300',
+      title: `Akselerasi ${recurringBehind.length} recurring yang tertinggal dari target YTD`,
+      body: `Gap collected kumulatif ${f(behindGap)}. Susun jadwal invoicing bulanan per proyek — recurring seharusnya bisa diprediksi dan ditagihkan tepat waktu.`,
+      amount: f(behindGap), amountClass: 'text-cyan-300',
+    })
+  }
+
+  if (neededRate > runRate * 1.5) {
+    steps.push({
+      period: 'Ags–Sep',
+      icon: 'fa-solid fa-bullseye',
+      iconClass: 'text-blue-400', iconBgClass: 'bg-blue-950/60',
+      borderClass: 'border-blue-500/25 bg-blue-950/15',
+      pillClass: 'bg-blue-500/20 text-blue-300',
+      title: 'Masukkan pipeline proyek baru untuk menutup gap run rate',
+      body: `Run rate saat ini ${f(runRate)}/bulan, dibutuhkan ${f(neededRate)}/bulan. Gap tidak bisa ditutup dari portofolio eksisting — perlu deal baru Q3 minimal ${f(neededRate - runRate)}/bulan tambahan.`,
+      amount: `${(neededRate / Math.max(runRate, 1)).toFixed(1)}× run rate`, amountClass: 'text-blue-300',
+    })
+  }
+
+  steps.push({
+    period: 'Review Rutin',
+    icon: 'fa-solid fa-calendar-check',
+    iconClass: 'text-slate-400', iconBgClass: 'bg-slate-800/60',
+    borderClass: 'border-slate-600/25 bg-slate-800/15',
+    pillClass: 'bg-slate-700/40 text-slate-300',
+    title: 'Tetapkan target invoice mingguan & review proyeksi EOY setiap Jumat',
+    body: `Proyeksi EOY saat ini ${f(d.projected_eoy ?? 0)} (${d.projected_ach ?? 0}% dari target). Assign PIC per proyek, monitor progres mingguan, update status di Revenue Tracker.`,
+    amount: null, amountClass: '',
+  })
+
+  return { topPriority, steps }
+})
 
 const typeMax = computed(() =>
   Math.max(...(data.value?.by_type ?? []).map((t: any) => Number(t.actual)), 1)

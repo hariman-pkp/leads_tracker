@@ -537,7 +537,7 @@
 
   <!-- Lightbox foto -->
   <Teleport to="body">
-    <div v-if="lightboxUrl" class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm"
+    <div v-if="lightboxUrl" class="fixed inset-0 flex items-center justify-center bg-black/80 backdrop-blur-sm" style="z-index:9999"
       @click.self="lightboxUrl = null" @keydown.esc="lightboxUrl = null">
       <div class="relative max-w-3xl max-h-[90vh] mx-4">
         <img :src="lightboxUrl" class="max-w-full max-h-[85vh] object-contain rounded-lg shadow-2xl" />
