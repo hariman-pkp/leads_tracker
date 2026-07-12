@@ -1,5 +1,7 @@
 import 'dart:typed_data';
 import 'dart:ui' as ui;
+import 'package:flutter/foundation.dart';
+import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:intl/intl.dart';
 
 class PhotoStamper {
@@ -71,7 +73,20 @@ class PhotoStamper {
     final picture = recorder.endRecording();
     final result  = await picture.toImage(src.width, src.height);
     final bd      = await result.toByteData(format: ui.ImageByteFormat.png);
-    return bd!.buffer.asUint8List();
+    final png     = bd!.buffer.asUint8List();
+
+    // Web tidak support flutter_image_compress — kembalikan PNG langsung
+    if (kIsWeb) return png;
+
+    // Compress PNG → JPEG quality 75, max 1024px untuk kurangi ukuran payload
+    final compressed = await FlutterImageCompress.compressWithList(
+      png,
+      minWidth:  1024,
+      minHeight: 1024,
+      quality:   75,
+      format:    CompressFormat.jpeg,
+    );
+    return compressed;
   }
 
   static void _drawText(

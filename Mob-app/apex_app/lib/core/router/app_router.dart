@@ -9,6 +9,7 @@ import '../../features/pipeline/screens/pipeline_detail_screen.dart';
 import '../../features/pipeline/screens/pipeline_form_screen.dart';
 import '../../features/checkin/screens/checkin_screen.dart';
 import '../../features/contacts/screens/contacts_screen.dart';
+import '../../features/schedule/screens/schedule_screen.dart';
 import '../../features/daily_report/screens/daily_report_screen.dart';
 import '../../features/followup/screens/followup_form_screen.dart';
 import '../../features/notifications/screens/notifications_screen.dart';
@@ -169,6 +170,10 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/contacts',
             builder: (_, __) => const ContactsScreen(),
+          ),
+          GoRoute(
+            path: '/schedule',
+            builder: (_, __) => const ScheduleScreen(),
           ),
           GoRoute(
             path: '/daily-report',

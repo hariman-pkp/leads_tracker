@@ -380,6 +380,18 @@ class FieldActivityController extends Controller
             'updated_at'    => now(),
         ]);
 
+        // Auto-done: tandai rencana kunjungan planned hari ini untuk lead yang sama
+        $leadId = $request->input('lead_id');
+        $userId = $request->input('user_id');
+        if ($leadId) {
+            DB::update("
+                UPDATE visit_plans
+                SET status = 'done', visit_log_id = ?, updated_at = NOW()
+                WHERE user_id = ? AND lead_id = ?
+                  AND planned_date = CURRENT_DATE AND status = 'planned'
+            ", [$id, $userId, $leadId]);
+        }
+
         return response()->json(['message' => 'Check-in berhasil dicatat.', 'id' => $id], 201);
     }
 

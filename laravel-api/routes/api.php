@@ -27,6 +27,7 @@ use App\Http\Controllers\Api\EntertainController;
 use App\Http\Controllers\Api\ProfileController;
 use App\Http\Controllers\Api\AnnualTargetController;
 use App\Http\Controllers\Api\ShareLinkController;
+use App\Http\Controllers\Api\VisitPlanController;
 
 // ── PUBLIC SHARE LINKS (no auth) ──────────────────────────────────────────
 Route::get ('/v1/public/annual-target/{token}',        [ShareLinkController::class, 'checkToken']);
@@ -198,6 +199,12 @@ Route::middleware('jwt')->group(function () {
     Route::post('/v1/field-activity/checkin',         [FieldActivityController::class, 'checkin']) ->middleware('jwt:field_activity');
     Route::put ('/v1/field-activity/{id}/checkout',   [FieldActivityController::class, 'checkout'])->middleware('jwt:field_activity');
     Route::delete('/v1/field-activity/{id}',          [FieldActivityController::class, 'destroy']) ->middleware('jwt:field_activity');
+
+    // ── Visit Plans ──────────────────────────────────────────────────────
+    Route::get   ('/v1/visit-plan',      [VisitPlanController::class, 'index'])  ->middleware('jwt:field_activity');
+    Route::post  ('/v1/visit-plan',      [VisitPlanController::class, 'store'])  ->middleware('jwt:field_activity');
+    Route::put   ('/v1/visit-plan/{id}', [VisitPlanController::class, 'update']) ->middleware('jwt:field_activity');
+    Route::delete('/v1/visit-plan/{id}', [VisitPlanController::class, 'destroy'])->middleware('jwt:field_activity');
 
     // ── Master Produk ────────────────────────────────────────────────────
     Route::get   ('/v1/master/products/dropdown', [ProductController::class, 'dropdown'])->middleware('jwt:products');
