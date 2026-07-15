@@ -285,7 +285,7 @@ class FieldActivityController extends Controller
         $date    = $request->query('date', now()->toDateString());
         $type    = $request->query('type', '');
         $page    = (int) $request->query('page', 1);
-        $perPage = 20;
+        $perPage = max(1, min(100, (int) $request->query('per_page', 25)));
         $offset  = ($page - 1) * $perPage;
 
         // Sales hanya bisa lihat data milik sendiri; Manager/Admin bisa filter by user_id
@@ -338,7 +338,8 @@ class FieldActivityController extends Controller
             'data'  => array_map(fn($r) => (array)$r, $rows),
             'total' => $total,
             'page'  => $page,
-            'pages' => (int) ceil($total / $perPage),
+            'per_page'    => $perPage,
+            'total_pages' => (int) ceil($total / $perPage),
         ]);
     }
 

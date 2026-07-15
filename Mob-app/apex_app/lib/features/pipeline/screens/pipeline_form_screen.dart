@@ -3,11 +3,13 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
+import '../../../core/network/api_client.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/date_utils.dart';
 import '../../../core/services/ocr_service.dart';
 import '../../../core/services/offline_service.dart';
 import '../../../shared/widgets/voice_note_field.dart';
+import '../../auth/providers/auth_provider.dart';
 import '../providers/pipeline_provider.dart';
 
 const _stageOptions = [
@@ -39,6 +41,8 @@ class _PipelineFormScreenState extends ConsumerState<PipelineFormScreen> {
   DateTime? _tglFu;
   bool _saving        = false;
   bool _scanning      = false;
+  String? _salesOwner; // nama sales owner yang dipilih
+  List<Map<String, dynamic>> _salesList = [];
 
   static const _lossReasonOptions = [
     'Harga tidak kompetitif',
@@ -54,6 +58,29 @@ class _PipelineFormScreenState extends ConsumerState<PipelineFormScreen> {
 
   bool get _isEdit => widget.leadId != null;
   bool _prefilled = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSalesList();
+  }
+
+  Future<void> _loadSalesList() async {
+    try {
+      final res  = await ApiClient.instance.get('/v1/master/sales');
+      final list = (res.data as List? ?? []) as List;
+      if (mounted) {
+        setState(() {
+          _salesList = list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+          // Default: nama user yang login (hanya saat tambah baru)
+          if (!_isEdit && _salesOwner == null) {
+            final authUser = ref.read(authProvider).user;
+            if (authUser != null) _salesOwner = authUser.nama;
+          }
+        });
+      }
+    } catch (_) {}
+  }
 
   Future<void> _scanBusinessCard() async {
     final picker = ImagePicker();
@@ -154,8 +181,9 @@ class _PipelineFormScreenState extends ConsumerState<PipelineFormScreen> {
           _valueCtrl.text = _fmtNumber(lead.dealValue!.toStringAsFixed(0));
         }
         _notesCtrl.text = lead.notes ?? '';
-        _stage = _stageOptions.contains(lead.stage) ? lead.stage : _stageOptions.first;
+        _stage      = _stageOptions.contains(lead.stage) ? lead.stage : _stageOptions.first;
         _lossReason = lead.lossReason;
+        _salesOwner = lead.salesOwner.isNotEmpty ? lead.salesOwner : null;
         if (lead.tglFu != null) {
           try { _tglFu = WibDate.parse(lead.tglFu!); } catch (_) {}
         }
@@ -188,6 +216,7 @@ class _PipelineFormScreenState extends ConsumerState<PipelineFormScreen> {
         if (_notesCtrl.text.isNotEmpty) 'last_fu_notes': _notesCtrl.text.trim(),
         if (_tglFu != null) 'tgl_fu': _tglFu!.toIso8601String().substring(0, 10),
         'stage': _stage,
+        if (_salesOwner != null) 'sales_owner': _salesOwner,
         if (_stage == 'Lost' && _lossReason != null)
           'loss_reason': _lossReason == 'Lainnya' && _lossReasonOtherCtrl.text.isNotEmpty
               ? _lossReasonOtherCtrl.text.trim()
@@ -366,6 +395,22 @@ class _PipelineFormScreenState extends ConsumerState<PipelineFormScreen> {
                   ),
                 ],
               ],
+
+              const SizedBox(height: 12),
+
+              // Sales Owner
+              if (_salesList.isNotEmpty)
+                DropdownButtonFormField<String>(
+                  value: _salesList.any((s) => s['nama'] == _salesOwner) ? _salesOwner : null,
+                  dropdownColor: AppColors.bg4,
+                  style: const TextStyle(color: AppColors.textPrimary, fontSize: 14),
+                  decoration: const InputDecoration(labelText: 'Sales Owner'),
+                  items: _salesList.map((s) => DropdownMenuItem<String>(
+                    value: s['nama'] as String,
+                    child: Text(s['nama'] as String),
+                  )).toList(),
+                  onChanged: (v) => setState(() => _salesOwner = v),
+                ),
 
               const SizedBox(height: 12),
               _ProductField(controller: _productCtrl),

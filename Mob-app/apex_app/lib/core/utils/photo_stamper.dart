@@ -81,9 +81,9 @@ class PhotoStamper {
     // Compress PNG → JPEG quality 75, max 1024px untuk kurangi ukuran payload
     final compressed = await FlutterImageCompress.compressWithList(
       png,
-      minWidth:  1024,
-      minHeight: 1024,
-      quality:   75,
+      minWidth:  800,
+      minHeight: 800,
+      quality:   65,
       format:    CompressFormat.jpeg,
     );
     return compressed;

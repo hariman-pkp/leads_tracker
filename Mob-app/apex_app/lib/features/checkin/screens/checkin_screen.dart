@@ -30,6 +30,7 @@ class _CheckinScreenState extends ConsumerState<CheckinScreen> {
   bool    _showForm    = false;
   bool    _gettingGps  = false;
   bool    _stampingImg = false;
+  bool    _submitting  = false; // guard double-tap check-in
   double? _lat, _lng;
 
   Uint8List? _stampedPhoto;   // foto sudah di-stamp, siap upload
@@ -81,9 +82,9 @@ class _CheckinScreenState extends ConsumerState<CheckinScreen> {
     final source = kIsWeb ? ImageSource.gallery : ImageSource.camera;
     final picked = await picker.pickImage(
       source: source,
-      imageQuality: 60,
-      maxWidth:  1280,
-      maxHeight: 1280,
+      imageQuality: 50,
+      maxWidth:  800,
+      maxHeight: 800,
       preferredCameraDevice: CameraDevice.rear,
     );
     if (picked == null) return;
@@ -115,6 +116,7 @@ class _CheckinScreenState extends ConsumerState<CheckinScreen> {
   }
 
   Future<void> _doCheckIn() async {
+    if (_submitting) return; // guard double-tap
     if (_stampedPhoto == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -124,6 +126,7 @@ class _CheckinScreenState extends ConsumerState<CheckinScreen> {
       );
       return;
     }
+    setState(() => _submitting = true);
 
     // Gunakan koordinat yang sudah dipilih jika ada; ambil GPS hanya jika belum diset
     double? lat = _lat;
@@ -153,6 +156,7 @@ class _CheckinScreenState extends ConsumerState<CheckinScreen> {
         _showForm     = false;
         _stampedPhoto = null;
         _selectedLead = null;
+        _submitting   = false;
       });
       _addressCtrl.clear();
       _notesCtrl.clear();
@@ -183,7 +187,9 @@ class _CheckinScreenState extends ConsumerState<CheckinScreen> {
     final activeVisit   = ref.watch(activeVisitProvider);
     final checkinState  = ref.watch(checkinNotifierProvider);
     final isLoading     = checkinState.status == CheckinStatus.loading;
-    final isAdmin       = ref.watch(authProvider).user?.isAdmin ?? false;
+    final authUser      = ref.watch(authProvider).user;
+    final isAdmin       = authUser?.isAdmin ?? false;
+    final isSalesOnly   = authUser?.isSalesOnly ?? true;
 
     ref.listen<CheckinState>(checkinNotifierProvider, (_, next) {
       if (next.status == CheckinStatus.error && next.errorMessage != null) {
@@ -254,12 +260,13 @@ class _CheckinScreenState extends ConsumerState<CheckinScreen> {
                   child: _CheckinForm(
                     addressCtrl:  _addressCtrl,
                     notesCtrl:    _notesCtrl,
-                    isLoading:    isLoading,
+                    isLoading:    isLoading || _submitting,
                     isGettingGps: _gettingGps,
                     isStamping:   _stampingImg,
                     stampedPhoto: _stampedPhoto,
                     selectedLead: _selectedLead,
                     isAdmin:      isAdmin,
+                    isSalesOnly:  isSalesOnly,
                     onGetGps:     _getGpsLocation,
                     onOpenMap:    _openMapPicker,
                     onTakePhoto:  _takePhoto,
@@ -572,6 +579,7 @@ class _CheckinForm extends ConsumerStatefulWidget {
   final Uint8List? stampedPhoto;
   final Map<String, dynamic>? selectedLead;
   final bool isAdmin;
+  final bool isSalesOnly;
   final VoidCallback onGetGps;
   final VoidCallback onOpenMap;
   final VoidCallback onTakePhoto;
@@ -590,6 +598,7 @@ class _CheckinForm extends ConsumerStatefulWidget {
     required this.stampedPhoto,
     required this.selectedLead,
     required this.isAdmin,
+    required this.isSalesOnly,
     required this.onGetGps,
     required this.onOpenMap,
     required this.onTakePhoto,
@@ -686,7 +695,7 @@ class _CheckinFormState extends ConsumerState<_CheckinForm> {
   }
 
   void _onAddressChange(String q) {
-    if (!widget.isAdmin) return; // Nominatim hanya untuk admin
+    if (widget.isSalesOnly) return; // Sales tidak pakai suggest lokasi
     _addressDebounce?.cancel();
     if (q.length < 3) {
       setState(() => _addressSuggestions = []);
@@ -874,7 +883,7 @@ class _CheckinFormState extends ConsumerState<_CheckinForm> {
               style: const TextStyle(color: AppColors.textPrimary, fontSize: 13),
               onChanged: _onAddressChange,
               decoration: InputDecoration(
-                hintText: widget.isAdmin ? 'Ketik alamat untuk mencari…' : 'Ketik Lokasi',
+                hintText: widget.isSalesOnly ? 'Ketik Lokasi' : 'Ketik alamat untuk mencari…',
                 hintStyle: const TextStyle(color: AppColors.textMuted, fontSize: 13),
                 prefixIcon: const Icon(Icons.place_outlined, color: AppColors.textSecondary, size: 18),
                 suffixIcon: _addressSearching
@@ -899,7 +908,7 @@ class _CheckinFormState extends ConsumerState<_CheckinForm> {
                 ),
               ),
             ),
-            if (widget.isAdmin && _addressSuggestions.isNotEmpty)
+            if (!widget.isSalesOnly && _addressSuggestions.isNotEmpty)
               Container(
                 margin: const EdgeInsets.only(top: 2),
                 decoration: BoxDecoration(
@@ -931,6 +940,7 @@ class _CheckinFormState extends ConsumerState<_CheckinForm> {
                   )).toList(),
                 ),
               ),
+            if (!widget.isSalesOnly) ...[
             const SizedBox(height: 8),
             Row(
               children: [
@@ -969,6 +979,7 @@ class _CheckinFormState extends ConsumerState<_CheckinForm> {
                 ),
               ],
             ),
+            ], // end if (!isSalesOnly)
             const SizedBox(height: 10),
 
             // Catatan

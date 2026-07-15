@@ -9,7 +9,6 @@ import '../../features/pipeline/screens/pipeline_detail_screen.dart';
 import '../../features/pipeline/screens/pipeline_form_screen.dart';
 import '../../features/checkin/screens/checkin_screen.dart';
 import '../../features/contacts/screens/contacts_screen.dart';
-import '../../features/schedule/screens/schedule_screen.dart';
 import '../../features/daily_report/screens/daily_report_screen.dart';
 import '../../features/followup/screens/followup_form_screen.dart';
 import '../../features/notifications/screens/notifications_screen.dart';
@@ -19,6 +18,7 @@ import '../../features/forecast/screens/forecast_screen.dart';
 import '../../features/sales_target/screens/sales_target_screen.dart';
 import '../../features/entertain/screens/entertain_list_screen.dart';
 import '../../features/entertain/screens/entertain_form_screen.dart';
+import '../../features/plan/screens/plan_screen.dart';
 import '../../features/entertain/screens/entertain_detail_screen.dart';
 import '../../shared/widgets/main_shell.dart';
 
@@ -74,12 +74,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (_, __) => const NotificationsScreen(),
       ),
 
-      // ── Follow-Up Hari Ini (root navigator, full screen) ─────────────
-      GoRoute(
-        path: '/followup-list',
-        parentNavigatorKey: _rootNavigatorKey,
-        builder: (_, __) => const FollowupListScreen(),
-      ),
+      // followup-list dipindah ke shell (bottom nav), lihat di bawah
 
       // ── Analytics Personal (root navigator, full screen) ─────────────
       GoRoute(
@@ -173,7 +168,15 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: '/schedule',
-            builder: (_, __) => const ScheduleScreen(),
+            builder: (_, __) => const FollowupListScreen(),
+          ),
+          GoRoute(
+            path: '/plan',
+            builder: (_, __) => const PlanScreen(),
+          ),
+          GoRoute(
+            path: '/followup-list',
+            builder: (_, __) => const FollowupListScreen(),
           ),
           GoRoute(
             path: '/daily-report',

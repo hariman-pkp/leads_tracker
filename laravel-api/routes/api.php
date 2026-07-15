@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\PipelineController;
 use App\Http\Controllers\Api\TodayController;
 use App\Http\Controllers\Api\ScheduleController;
+use App\Http\Controllers\Api\PlanController;
 use App\Http\Controllers\Api\FollowupController;
 use App\Http\Controllers\Api\WinlossController;
 use App\Http\Controllers\Api\ContactsController;
@@ -22,6 +23,7 @@ use App\Http\Controllers\Api\ImportController;
 use App\Http\Controllers\Api\ProductController;
 use App\Http\Controllers\Api\FieldActivityController;
 use App\Http\Controllers\Api\ForecastController;
+use App\Http\Controllers\Api\ExportController;
 use App\Http\Controllers\Api\SalesTargetController;
 use App\Http\Controllers\Api\EntertainController;
 use App\Http\Controllers\Api\ProfileController;
@@ -30,8 +32,10 @@ use App\Http\Controllers\Api\ShareLinkController;
 use App\Http\Controllers\Api\VisitPlanController;
 
 // ── PUBLIC SHARE LINKS (no auth) ──────────────────────────────────────────
-Route::get ('/v1/public/annual-target/{token}',        [ShareLinkController::class, 'checkToken']);
-Route::post('/v1/public/annual-target/{token}/verify', [ShareLinkController::class, 'verifyAnnualTarget']);
+Route::get ('/v1/public/annual-target/{token}',          [ShareLinkController::class, 'checkToken']);
+Route::post('/v1/public/annual-target/{token}/verify',   [ShareLinkController::class, 'verifyAnnualTarget']);
+Route::get ('/v1/public/revenue-dashboard/{token}',      [ShareLinkController::class, 'checkTokenDashboard']);
+Route::post('/v1/public/revenue-dashboard/{token}/verify',[ShareLinkController::class, 'verifyDashboard']);
 
 // ── AUTH ──────────────────────────────────────────────────────────────────
 Route::post('/v1/auth/login',            [AuthController::class, 'login']);
@@ -79,6 +83,10 @@ Route::middleware('jwt')->group(function () {
          ->middleware('jwt:pipeline');
     Route::get('/v1/schedule', [ScheduleController::class, 'index'])
          ->middleware('jwt:pipeline');
+    Route::get  ('/v1/plan/weekly', [PlanController::class, 'weekly'])
+         ->middleware('jwt:plan');
+    Route::patch('/v1/plan/assign', [PlanController::class, 'assign'])
+         ->middleware('jwt:plan');
 
     // Follow-up
     Route::get  ('/v1/followup',          [FollowupController::class, 'index'])
@@ -282,8 +290,18 @@ Route::middleware('jwt')->group(function () {
     Route::post ('/v1/entertain/claims/{cid}/approve', [EntertainController::class, 'approve']);
 
     // Share Links (protected)
-    Route::get ('/v1/share-links/annual-target',          [ShareLinkController::class, 'getAnnualTarget'])      ->middleware('jwt:rev_annual_target');
-    Route::post('/v1/share-links/annual-target/generate', [ShareLinkController::class, 'generateAnnualTarget']) ->middleware('jwt:rev_annual_target');
+    Route::get ('/v1/share-links/annual-target',             [ShareLinkController::class, 'getAnnualTarget'])        ->middleware('jwt:rev_annual_target');
+    Route::post('/v1/share-links/annual-target/generate',    [ShareLinkController::class, 'generateAnnualTarget'])   ->middleware('jwt:rev_annual_target');
+    Route::get ('/v1/share-links/revenue-dashboard',         [ShareLinkController::class, 'getDashboard'])           ->middleware('jwt:revenue');
+    Route::post('/v1/share-links/revenue-dashboard/generate',[ShareLinkController::class, 'generateDashboard'])      ->middleware('jwt:revenue');
+
+    // Export Data
+    Route::get('/v1/export/pipeline',            [ExportController::class, 'pipelineCsv'])        ->middleware('jwt:pipeline');
+    Route::get('/v1/export/pipeline/pdf',        [ExportController::class, 'pipelinePdf'])        ->middleware('jwt:pipeline');
+    Route::get('/v1/export/daily-reports',       [ExportController::class, 'dailyReportCsv'])     ->middleware('jwt:daily_report');
+    Route::get('/v1/export/daily-reports/pdf',   [ExportController::class, 'dailyReportPdf'])     ->middleware('jwt:daily_report');
+    Route::get('/v1/export/analytics',           [ExportController::class, 'analyticsCsv'])       ->middleware('jwt:pipeline');
+    Route::get('/v1/export/analytics/pdf',       [ExportController::class, 'analyticsPdf'])       ->middleware('jwt:pipeline');
 
     // Annual Target
     Route::get ('/v1/annual-targets/orgs',    [AnnualTargetController::class, 'orgs'])       ->middleware('jwt:rev_annual_target');

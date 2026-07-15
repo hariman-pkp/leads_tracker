@@ -22,7 +22,7 @@ class _MainShellState extends ConsumerState<MainShell> {
     _TabItem(path: '/dashboard',    icon: Icons.dashboard_outlined,       activeIcon: Icons.dashboard,        label: 'Dashboard'),
     _TabItem(path: '/pipeline',     icon: Icons.business_center_outlined,  activeIcon: Icons.business_center,  label: 'Pipeline'),
     _TabItem(path: '/checkin',      icon: Icons.place_outlined,            activeIcon: Icons.place,            label: 'Check-in'),
-    _TabItem(path: '/schedule',      icon: Icons.calendar_month_outlined,   activeIcon: Icons.calendar_month,   label: 'Jadwal'),
+    _TabItem(path: '/schedule',      icon: Icons.checklist_outlined,        activeIcon: Icons.checklist,        label: 'Follow-Up'),
     _TabItem(path: '/daily-report', icon: Icons.assignment_outlined,       activeIcon: Icons.assignment,       label: 'Laporan'),
   ];
 
@@ -231,7 +231,8 @@ class _AppDrawer extends ConsumerWidget {
               _section('Utama'),
               _item(context, Icons.dashboard,          'Dashboard',          '/dashboard', go),
               _item(context, Icons.business_center,    'Pipeline',           '/pipeline',  go),
-              _item(context, Icons.calendar_month,    'Jadwal',             '/schedule',  go),
+              _item(context, Icons.checklist,          'Follow-Up',          '/schedule',  go),
+              _item(context, Icons.table_chart_outlined, 'Weekly Planner',   '/plan',      go),
               _item(context, Icons.assignment,         'Laporan Harian',     '/daily-report', go),
               _item(context, Icons.place,              'Check-in',           '/checkin',   go),
 
@@ -248,7 +249,6 @@ class _AppDrawer extends ConsumerWidget {
 
               const Divider(color: AppColors.border, height: 24),
               _section('Lainnya'),
-              _item(context, Icons.format_list_bulleted,'Follow-up Hari Ini','/followup-list', go),
               _item(context, Icons.notifications,      'Notifikasi',         '/notifications', go),
 
               const Divider(color: AppColors.border, height: 24),

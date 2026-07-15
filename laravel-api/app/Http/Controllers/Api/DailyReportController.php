@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Api\NotificationController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -242,6 +243,24 @@ class DailyReportController extends Controller
              WHERE id = ?",
             [$lat, $lng, $address, $id]
         );
+
+        // Kirim notifikasi ke semua Manager & Admin
+        $salesNama = $auth['nama'] ?? 'Sales';
+        $managers  = DB::select("
+            SELECT u.id FROM users u
+            JOIN roles r ON r.id = u.role_id
+            WHERE u.is_active = 1 AND r.name IN ('Manager','Admin','admin','manager')
+              AND u.id != ?
+        ", [$auth['id']]);
+
+        foreach ($managers as $mgr) {
+            NotificationController::createSystemNotif(
+                userId: $mgr->id,
+                type:   'info',
+                title:  'Laporan Harian Masuk',
+                body:   "$salesNama telah mengirimkan laporan harian.",
+            );
+        }
 
         return response()->json(['message' => 'Laporan berhasil dikirim ke manager.']);
     }

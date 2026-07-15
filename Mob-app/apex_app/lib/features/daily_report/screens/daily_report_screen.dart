@@ -121,9 +121,35 @@ class _CreateReportTab extends ConsumerStatefulWidget {
 class _CreateReportTabState extends ConsumerState<_CreateReportTab> {
   final _obstacleCtrl = TextEditingController();
   final _planCtrl     = TextEditingController();
-  String? _mood;
-  bool    _sending    = false;
-  bool    _submitted  = false;
+  String?            _mood;
+  bool               _sending   = false;
+  bool               _submitted = false;
+  DailyReportModel?  _todayReport; // laporan hari ini jika sudah ada
+  bool               _checkingToday = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkTodayReport();
+  }
+
+  Future<void> _checkTodayReport() async {
+    try {
+      final repo   = ref.read(dailyReportRepositoryProvider);
+      final today  = DateTime.now();
+      final result = await repo.fetchReports(dateFrom: today, dateTo: today, limit: 1);
+      if (mounted) {
+        setState(() {
+          _todayReport   = result.reports.isNotEmpty ? result.reports.first : null;
+          _checkingToday = false;
+          // Jika sudah terkirim, tampilkan halaman sukses langsung
+          if (_todayReport?.isSent == true) _submitted = true;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _checkingToday = false);
+    }
+  }
 
   @override
   void dispose() {
@@ -159,7 +185,7 @@ class _CreateReportTabState extends ConsumerState<_CreateReportTab> {
 
       await repo.sendReport(id, lat: lat, lng: lng, address: address);
       ref.read(reportHistoryProvider.notifier).refresh();
-      if (mounted) setState(() => _submitted = true);
+      if (mounted) setState(() { _submitted = true; _todayReport = null; });
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -174,7 +200,44 @@ class _CreateReportTabState extends ConsumerState<_CreateReportTab> {
 
   @override
   Widget build(BuildContext context) {
-    if (_submitted) return _SuccessView(onReset: () => setState(() => _submitted = false));
+    if (_checkingToday) {
+      return const Center(child: CircularProgressIndicator(color: AppColors.primary));
+    }
+
+    if (_submitted) {
+      return _SuccessView(onReset: () {
+        setState(() { _submitted = false; _todayReport = null; });
+        _checkTodayReport();
+      });
+    }
+
+    // Laporan hari ini sudah ada tapi masih draft
+    if (_todayReport != null && _todayReport!.isDraft) {
+      return _DraftExistsView(
+        report: _todayReport!,
+        onSend: () async {
+          setState(() => _sending = true);
+          try {
+            final repo = ref.read(dailyReportRepositoryProvider);
+            double? lat, lng; String? address;
+            try {
+              final loc = await LocationService.instance.getCurrentLocation();
+              lat = loc.latitude; lng = loc.longitude; address = loc.address;
+            } catch (_) {}
+            await repo.sendReport(_todayReport!.id, lat: lat, lng: lng, address: address);
+            ref.read(reportHistoryProvider.notifier).refresh();
+            if (mounted) setState(() => _submitted = true);
+          } catch (e) {
+            if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Gagal: $e'), backgroundColor: AppColors.danger),
+            );
+          } finally {
+            if (mounted) setState(() => _sending = false);
+          }
+        },
+        sending: _sending,
+      );
+    }
 
     final summary = ref.watch(autoSummaryProvider);
 
@@ -894,6 +957,19 @@ class _ReportHistoryCard extends ConsumerWidget {
               ],
             ],
           ),
+          if (report.salesNama != null) ...[
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                const Icon(Icons.person_outline, size: 12, color: AppColors.textMuted),
+                const SizedBox(width: 4),
+                Text(
+                  report.salesNama!,
+                  style: const TextStyle(color: AppColors.textMuted, fontSize: 12),
+                ),
+              ],
+            ),
+          ],
           const SizedBox(height: 8),
           Row(
             children: [
@@ -969,6 +1045,92 @@ class _MiniStat extends StatelessWidget {
     ),
   );
 }
+
+// ── Draft Exists View ─────────────────────────────────────────────────────────
+
+class _DraftExistsView extends StatelessWidget {
+  final DailyReportModel report;
+  final VoidCallback     onSend;
+  final bool             sending;
+
+  const _DraftExistsView({
+    required this.report,
+    required this.onSend,
+    required this.sending,
+  });
+
+  @override
+  Widget build(BuildContext context) => Center(
+    child: Padding(
+      padding: const EdgeInsets.all(32),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            width: 80, height: 80,
+            decoration: BoxDecoration(
+              color: AppColors.yellow.withAlpha(30),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.edit_note, color: AppColors.yellow, size: 44),
+          ),
+          const SizedBox(height: 20),
+          const Text(
+            'Draft Tersimpan',
+            style: TextStyle(
+              color: AppColors.textPrimary,
+              fontSize: 20,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Laporan hari ini sudah tersimpan sebagai draft.\nSiap dikirim ke Manager?',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: AppColors.textSecondary, fontSize: 14, height: 1.5),
+          ),
+          const SizedBox(height: 28),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: sending ? null : () => Navigator.of(context).maybePop(),
+                  icon: const Icon(Icons.edit_outlined, size: 16),
+                  label: const Text('Edit Draft'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.textSecondary,
+                    side: const BorderSide(color: AppColors.border),
+                    padding: const EdgeInsets.symmetric(vertical: 13),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: sending ? null : onSend,
+                  icon: sending
+                      ? const SizedBox(width: 16, height: 16,
+                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                      : const Icon(Icons.send_outlined, size: 16),
+                  label: Text(sending ? 'Mengirim...' : 'Kirim Sekarang'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 13),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+// ── Success View ──────────────────────────────────────────────────────────────
 
 class _SuccessView extends StatelessWidget {
   final VoidCallback onReset;
