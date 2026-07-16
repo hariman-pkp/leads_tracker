@@ -15,7 +15,7 @@
       <i class="fa-solid fa-circle-notch fa-spin text-3xl text-primary-400" />
     </div>
 
-    <template v-else-if="data">
+    <div v-else-if="data">
 
       <!-- ── ROW 1: KPI Strip ───────────────────────────────────────── -->
       <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-5">
@@ -128,12 +128,12 @@
           <div v-if="data.health_score === 0 && (data.stats?.total ?? 0) === 0" class="text-sm text-gray-600">
             Tidak ada data
           </div>
-          <template v-else-if="data.health_score > 0 || (data.stats?.total ?? 0) > 0">
+          <div v-else-if="data.health_score > 0 || (data.stats?.total ?? 0) > 0">
             <div class="text-sm font-semibold" :class="healthColor === '#34d399' ? 'text-emerald-400' : healthColor === '#facc15' ? 'text-yellow-400' : 'text-red-400'">
               {{ healthLabel }}
             </div>
             <p class="text-xs text-gray-500 mt-1 max-w-36">{{ healthDesc }}</p>
-          </template>
+          </div>
         </div>
 
         <!-- Revenue Achievement -->
@@ -496,7 +496,7 @@
 
       </div>
 
-    </template>
+    </div>
   </div>
 </template>
 
