@@ -93,10 +93,28 @@
     <div class="flex-1 flex flex-col min-w-0 overflow-hidden">
       <!-- Topbar -->
       <header class="flex items-center gap-3 px-4 py-3 border-b border-apex-border bg-apex-surface/80 backdrop-blur-sm flex-shrink-0">
-        <button class="btn-ghost btn-sm rounded-lg" @click="sidebarOpen = !sidebarOpen">
+        <!-- Desktop: sidebar toggle -->
+        <button class="hidden md:flex btn-ghost btn-sm rounded-lg" @click="sidebarOpen = !sidebarOpen">
           <i class="fa-solid fa-bars text-apex-muted" />
         </button>
+
+        <!-- Mobile: APEX logo + drawer toggle -->
+        <div class="flex md:hidden items-center gap-2">
+          <button @click="mobileMenuOpen = !mobileMenuOpen" class="relative p-1.5 -ml-1 rounded-lg text-apex-muted hover:text-apex-text">
+            <i class="fa-solid fa-grid-2 text-lg" />
+            <span v-if="unreadCount > 0"
+              class="absolute -top-0.5 -right-0.5 min-w-[14px] h-3.5 px-0.5 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center leading-none">
+              {{ unreadCount > 9 ? '9+' : unreadCount }}
+            </span>
+          </button>
+          <div class="w-6 h-6 bg-primary-600 rounded-md flex items-center justify-center shadow shadow-primary-600/40">
+            <span class="text-white font-black text-[8px] tracking-tight">APEX</span>
+          </div>
+          <span class="text-sm font-bold text-apex-text tracking-wide">APEX CRM</span>
+        </div>
+
         <div class="flex-1" />
+
         <div class="text-xs text-apex-faint hidden sm:block">
           <i class="fa-regular fa-calendar mr-1.5" />
           {{ todayStr }}
@@ -126,7 +144,7 @@
       </header>
 
       <!-- Page content -->
-      <main class="flex-1 overflow-y-auto p-5">
+      <main class="flex-1 overflow-y-auto p-5 pb-20 md:pb-5">
         <slot />
       </main>
     </div>
@@ -137,6 +155,84 @@
       class="fixed inset-0 bg-black/60 z-30"
       @click="sidebarOpen = false"
     />
+
+    <!-- Mobile Bottom Navigation -->
+    <nav v-if="auth.user" class="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-apex-surface border-t border-apex-border" style="padding-bottom: env(safe-area-inset-bottom)">
+      <div class="flex items-center justify-around px-1 pt-1 pb-2">
+        <MobileNavItem v-for="item in bottomNavItems" :key="item.key"
+          :to="item.url" :icon="item.icon" :label="item.label" />
+        <button @click="mobileMenuOpen = true"
+                class="flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl text-apex-muted hover:text-apex-text transition-colors">
+          <i class="fa-solid fa-ellipsis text-xl" />
+          <span class="text-[10px] font-medium leading-tight">Lainnya</span>
+        </button>
+      </div>
+    </nav>
+
+    <!-- Mobile drawer "Lainnya" -->
+    <Teleport to="body">
+      <Transition name="slide-up">
+        <div v-if="mobileMenuOpen" class="md:hidden fixed inset-0 z-[9999]">
+          <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" @click="mobileMenuOpen = false" />
+          <div class="absolute bottom-0 left-0 right-0 bg-apex-surface rounded-t-3xl border-t border-apex-border overflow-hidden" style="max-height:85vh">
+
+            <!-- Handle bar -->
+            <div class="flex justify-center pt-3 pb-1">
+              <div class="w-10 h-1 rounded-full bg-apex-border" />
+            </div>
+
+            <!-- Header: user info + notif -->
+            <div class="flex items-center gap-3 px-5 py-3 border-b border-apex-border">
+              <div class="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0"
+                :style="{ background: auth.user?.avatar_color || '#2563eb' }">
+                {{ auth.user?.nama?.charAt(0) }}
+              </div>
+              <div class="flex-1 min-w-0">
+                <div class="text-apex-text font-semibold text-sm truncate">{{ auth.user?.nama }}</div>
+                <div class="text-apex-muted text-xs">{{ auth.user?.role_nama }}</div>
+              </div>
+              <!-- Notif bell -->
+              <button @click="mobileMenuOpen = false; toggleNotif()"
+                class="relative p-2 rounded-xl bg-apex-card text-apex-muted hover:text-apex-text">
+                <i class="fa-regular fa-bell text-lg" />
+                <span v-if="unreadCount > 0"
+                  class="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center leading-none">
+                  {{ unreadCount > 99 ? '99+' : unreadCount }}
+                </span>
+              </button>
+            </div>
+
+            <!-- Scrollable menu content -->
+            <div class="overflow-y-auto" style="max-height:calc(85vh - 140px)">
+              <div v-for="group in drawerMenuGroups" :key="group.name" class="px-4 pt-4 pb-2">
+                <div class="text-[10px] font-bold uppercase tracking-widest text-apex-faint mb-2 px-1">{{ group.name }}</div>
+                <div class="grid grid-cols-4 gap-2">
+                  <NuxtLink
+                    v-for="m in group.menus"
+                    :key="m.key"
+                    :to="m.url"
+                    @click="mobileMenuOpen = false"
+                    class="flex flex-col items-center gap-1.5 p-2.5 rounded-2xl transition-colors text-center"
+                    :class="isActive(m.url) ? 'bg-primary-700/30 text-primary-300' : 'bg-apex-card text-apex-muted hover:bg-apex-border hover:text-apex-text'"
+                  >
+                    <i :class="`fa-solid ${m.icon} text-xl`"
+                       :style="isActive(m.url) ? '' : 'color: inherit'" />
+                    <span class="text-[10px] font-medium leading-tight">{{ m.shortLabel || m.label }}</span>
+                  </NuxtLink>
+                </div>
+              </div>
+            </div>
+
+            <!-- Logout -->
+            <div class="px-4 py-3 border-t border-apex-border" style="padding-bottom: calc(env(safe-area-inset-bottom) + 12px)">
+              <button @click="auth.logout()" class="w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-red-900/30 text-red-400 text-sm font-semibold">
+                <i class="fa-solid fa-right-from-bracket" /> Logout
+              </button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
 
     <!-- Tutup notif dropdown jika klik di luar -->
     <div v-if="notifOpen" class="fixed inset-0 z-[9980]" @click="notifOpen = false" />
@@ -503,6 +599,80 @@ function timeAgo(dateStr: string): string {
 const { navGroups } = useNavMenus()
 const sidebarOpen   = ref(true)
 const isMobile      = ref(false)
+const mobileMenuOpen = ref(false)
+
+// Label pendek untuk grid 4 kolom di drawer
+const SHORT_LABELS: Record<string, string> = {
+  today:              'Hari Ini',
+  calendar:           'Kalender',
+  plan:               'Planner',
+  followup:           'Log FU',
+  field_activity:     'Check-In',
+  field_monitor:      'Monitor',
+  daily_report:       'Laporan',
+  dashboard:          'Dashboard',
+  pipeline:           'Pipeline',
+  contacts:           'Kontak',
+  winloss:            'Win/Loss',
+  insights:           'Insights',
+  forecast:           'Forecast',
+  heatmap:            'Heatmap',
+  sales_target:       'Target',
+  rev_annual_target:  'Annual',
+  rev_dashboard:      'Revenue',
+  rev_insights:       'Insights',
+  rev_tracker:        'Tracker',
+  rev_monthly:        'Monthly',
+  rev_proj_view:      'Projects',
+  rev_invoice:        'Invoice',
+  rev_kpi:            'KPI',
+  rev_budget:         'Budget',
+  export:             'Export',
+  import:             'Import',
+  products:           'Produk',
+  org:                'Organisasi',
+  sales:              'Sales',
+  roles:              'Roles',
+  users:              'Users',
+  settings:           'Setelan',
+  cleansing:          'Cleansing',
+  entertain:          'Entertain',
+  entertain_claims:   'Klaim',
+  entertain_approval: 'Approval',
+}
+
+// Bottom nav: 5 item tetap
+const BOTTOM_NAV_KEYS = ['dashboard', 'pipeline', 'today', 'calendar']
+const BOTTOM_NAV_LABELS: Record<string, string> = {
+  dashboard: 'Dashboard',
+  pipeline:  'Pipeline',
+  today:     'Hari Ini',
+  calendar:  'Kalender FU',
+}
+
+const bottomNavItems = computed(() => {
+  const allMenus = navGroups.value.flatMap((g: any) => g.menus)
+  const allowed = new Set(allMenus.map((m: any) => m.key))
+  return BOTTOM_NAV_KEYS
+    .filter(k => allowed.has(k))
+    .map(k => {
+      const m = allMenus.find((m: any) => m.key === k)
+      return { ...m, label: BOTTOM_NAV_LABELS[k] }
+    })
+})
+
+// Drawer: semua menu kecuali 5 bottom nav, dikelompokkan
+const drawerMenuGroups = computed(() => {
+  const bottomKeys = new Set(BOTTOM_NAV_KEYS)
+  const groups: { name: string; menus: any[] }[] = []
+  for (const g of navGroups.value) {
+    const menus = g.menus
+      .filter((m: any) => !bottomKeys.has(m.key))
+      .map((m: any) => ({ ...m, shortLabel: SHORT_LABELS[m.key] || m.label }))
+    if (menus.length) groups.push({ name: g.name, menus })
+  }
+  return groups
+})
 
 const todayStr = computed(() =>
   new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
@@ -510,7 +680,9 @@ const todayStr = computed(() =>
 
 function isActive(url: string): boolean {
   if (url === '/') return route.path === '/'
-  return route.path.startsWith(url)
+  if (route.path === url) return true
+  // only treat as prefix-match if url ends with / or next char is /
+  return route.path.startsWith(url + '/')
 }
 
 function groupHasActive(group: { menus: { url: string }[] }): boolean {
