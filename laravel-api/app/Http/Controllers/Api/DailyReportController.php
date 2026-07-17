@@ -110,39 +110,43 @@ class DailyReportController extends Controller
         $d    = $request->all();
         $date = $d['report_date'] ?? now()->toDateString();
 
-        // Cek apakah laporan hari ini sudah ada
+        // Auto-rekap dari data check-in & follow-up hari ini
+        $autoSummary = $this->buildAutoSummary($auth['id'], $date);
+
+        $fields = [
+            'visit_count'    => $d['visit_count']    ?? $autoSummary['visit_count'],
+            'fu_count'       => $d['fu_count']        ?? $autoSummary['fu_count'],
+            'new_lead_count' => $d['new_lead_count']  ?? $autoSummary['new_lead_count'],
+            'notes_obstacle' => $d['notes_obstacle']  ?? null,
+            'notes_plan'     => $d['notes_plan']      ?? null,
+            'mood'           => $d['mood']             ?? null,
+            'visit_details'  => isset($d['visit_details'])
+                ? json_encode($d['visit_details'])
+                : json_encode($autoSummary['visit_details']),
+            'updated_at'     => now(),
+        ];
+
+        // Upsert: update jika sudah ada, insert jika belum
         $existing = DB::selectOne(
             "SELECT id, status FROM daily_reports WHERE user_id = ? AND report_date = ?",
             [$auth['id'], $date]
         );
 
         if ($existing) {
+            DB::table('daily_reports')->where('id', $existing->id)->update($fields);
             return response()->json([
-                'detail'    => 'Laporan untuk tanggal ini sudah ada.',
+                'message'   => 'Laporan berhasil diperbarui.',
                 'report_id' => $existing->id,
                 'status'    => $existing->status,
-            ], 422);
+            ]);
         }
 
-        // Auto-rekap dari data check-in & follow-up hari ini
-        $autoSummary = $this->buildAutoSummary($auth['id'], $date);
-
-        $id = DB::table('daily_reports')->insertGetId([
-            'user_id'         => $auth['id'],
-            'report_date'     => $date,
-            'status'          => 'draft',
-            'visit_count'     => $d['visit_count']    ?? $autoSummary['visit_count'],
-            'fu_count'        => $d['fu_count']        ?? $autoSummary['fu_count'],
-            'new_lead_count'  => $d['new_lead_count']  ?? $autoSummary['new_lead_count'],
-            'notes_obstacle'  => $d['notes_obstacle']  ?? null,
-            'notes_plan'      => $d['notes_plan']      ?? null,
-            'mood'            => $d['mood']             ?? null,
-            'visit_details'   => isset($d['visit_details'])
-                ? json_encode($d['visit_details'])
-                : json_encode($autoSummary['visit_details']),
-            'created_at'      => now(),
-            'updated_at'      => now(),
-        ]);
+        $id = DB::table('daily_reports')->insertGetId(array_merge($fields, [
+            'user_id'    => $auth['id'],
+            'report_date'=> $date,
+            'status'     => 'draft',
+            'created_at' => now(),
+        ]));
 
         return response()->json([
             'message'   => 'Laporan berhasil dibuat.',
@@ -228,13 +232,11 @@ class DailyReportController extends Controller
         if ($report->user_id !== $auth['id']) {
             return response()->json(['detail' => 'Anda tidak dapat mengirim laporan orang lain.'], 403);
         }
-        if ($report->status === 'sent') {
-            return response()->json(['detail' => 'Laporan sudah pernah dikirim.'], 422);
-        }
-
         $lat     = $request->input('latitude');
         $lng     = $request->input('longitude');
         $address = $request->input('address');
+
+        $isFirstSend = $report->status !== 'sent';
 
         DB::update(
             "UPDATE daily_reports
@@ -244,22 +246,24 @@ class DailyReportController extends Controller
             [$lat, $lng, $address, $id]
         );
 
-        // Kirim notifikasi ke semua Manager & Admin
-        $salesNama = $auth['nama'] ?? 'Sales';
-        $managers  = DB::select("
-            SELECT u.id FROM users u
-            JOIN roles r ON r.id = u.role_id
-            WHERE u.is_active = 1 AND LOWER(r.nama) IN ('manager','admin')
-              AND u.id != ?
-        ", [$auth['id']]);
+        // Notifikasi hanya dikirim saat pertama kali send
+        if ($isFirstSend) {
+            $salesNama = $auth['nama'] ?? 'Sales';
+            $managers  = DB::select("
+                SELECT u.id FROM users u
+                JOIN roles r ON r.id = u.role_id
+                WHERE u.is_active = 1 AND LOWER(r.nama) IN ('manager','admin')
+                  AND u.id != ?
+            ", [$auth['id']]);
 
-        foreach ($managers as $mgr) {
-            NotificationController::createSystemNotif(
-                userId: $mgr->id,
-                type:   'info',
-                title:  'Laporan Harian Masuk',
-                body:   "$salesNama telah mengirimkan laporan harian.",
-            );
+            foreach ($managers as $mgr) {
+                NotificationController::createSystemNotif(
+                    userId: $mgr->id,
+                    type:   'info',
+                    title:  'Laporan Harian Masuk',
+                    body:   "$salesNama telah mengirimkan laporan harian.",
+                );
+            }
         }
 
         return response()->json(['message' => 'Laporan berhasil dikirim ke manager.']);
