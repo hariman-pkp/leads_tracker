@@ -980,7 +980,74 @@ class _ReportHistoryCard extends ConsumerWidget {
                 const SizedBox(width: 12),
                 Text(_moodEmoji(report.mood!), style: const TextStyle(fontSize: 16)),
               ],
+              const Spacer(),
+              if ((report.notesObstacle?.isNotEmpty ?? false) ||
+                  (report.notesPlan?.isNotEmpty ?? false))
+                GestureDetector(
+                  onTap: () => _showNotesDialog(context),
+                  child: const Icon(Icons.info_outline,
+                      size: 18, color: AppColors.primary),
+                ),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showNotesDialog(BuildContext context) {
+    showDialog<void>(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: AppColors.bg2,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+        contentPadding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
+        title: const Row(
+          children: [
+            Icon(Icons.info_outline, size: 18, color: AppColors.primary),
+            SizedBox(width: 8),
+            Text('Detail Laporan',
+                style: TextStyle(color: AppColors.textPrimary,
+                    fontSize: 15, fontWeight: FontWeight.w600)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (report.notesObstacle?.isNotEmpty ?? false) ...[
+              const Row(children: [
+                Text('🚧', style: TextStyle(fontSize: 13)),
+                SizedBox(width: 6),
+                Text('Hambatan / Kendala',
+                    style: TextStyle(color: AppColors.textMuted,
+                        fontSize: 12, fontWeight: FontWeight.w600)),
+              ]),
+              const SizedBox(height: 4),
+              Text(report.notesObstacle!,
+                  style: const TextStyle(color: AppColors.textPrimary, fontSize: 13)),
+              const SizedBox(height: 14),
+            ],
+            if (report.notesPlan?.isNotEmpty ?? false) ...[
+              const Row(children: [
+                Text('📅', style: TextStyle(fontSize: 13)),
+                SizedBox(width: 6),
+                Text('Rencana Besok',
+                    style: TextStyle(color: AppColors.textMuted,
+                        fontSize: 12, fontWeight: FontWeight.w600)),
+              ]),
+              const SizedBox(height: 4),
+              Text(report.notesPlan!,
+                  style: const TextStyle(color: AppColors.textPrimary, fontSize: 13)),
+            ],
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Tutup',
+                style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w600)),
           ),
         ],
       ),
