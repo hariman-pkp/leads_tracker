@@ -229,41 +229,91 @@
                style="max-height: 90vh; overflow-y: auto">
             <div class="flex items-center justify-between mb-4">
               <h3 class="text-base font-semibold text-white">
-                {{ modal.lead ? 'Jadwalkan Lead' : 'Tambah Rencana' }}
+                {{ modal.leadFixed ? 'Jadwalkan Lead' : 'Tambah Rencana' }}
               </h3>
               <button @click="closeModal" class="text-slate-500 hover:text-white">
                 <i class="fa-solid fa-xmark text-lg" />
               </button>
             </div>
 
-            <!-- Lead selector (jika belum dipilih) -->
-            <div v-if="!modal.lead" class="mb-4">
-              <label class="form-label">Pilih Lead</label>
-              <input v-model="leadSearch" class="form-input w-full mb-2" placeholder="Cari nama company..." />
-              <div class="max-h-52 overflow-y-auto space-y-1 rounded-xl border border-slate-700 bg-navy-900 p-2">
-                <div v-if="!filteredLeadPool.length" class="text-xs text-apex-muted text-center py-3">
-                  Tidak ada hasil
+            <!-- Tab switcher (hanya jika lead belum fix) -->
+            <div v-if="!modal.leadFixed" class="flex gap-1 mb-4 bg-navy-900 p-1 rounded-xl">
+              <button @click="modal.tab = 'pool'; modal.lead = null"
+                      :class="modal.tab === 'pool' ? 'bg-navy-700 text-white' : 'text-apex-muted hover:text-gray-300'"
+                      class="flex-1 text-sm font-medium py-1.5 rounded-lg transition-colors">
+                <i class="fa-solid fa-list mr-1.5" />Dari Pool
+              </button>
+              <button @click="modal.tab = 'new'"
+                      :class="modal.tab === 'new' ? 'bg-primary-700/80 text-white' : 'text-apex-muted hover:text-gray-300'"
+                      class="flex-1 text-sm font-medium py-1.5 rounded-lg transition-colors">
+                <i class="fa-solid fa-plus mr-1.5" />Lead Baru
+              </button>
+            </div>
+
+            <!-- ── TAB: Dari Pool ── -->
+            <div v-if="modal.tab === 'pool'">
+              <!-- Lead selector (jika belum dipilih) -->
+              <div v-if="!modal.lead" class="mb-4">
+                <label class="form-label">Pilih Lead</label>
+                <input v-model="leadSearch" class="form-input w-full mb-2" placeholder="Cari nama company..." />
+                <div class="max-h-52 overflow-y-auto space-y-1 rounded-xl border border-slate-700 bg-navy-900 p-2">
+                  <div v-if="!filteredLeadPool.length" class="text-xs text-apex-muted text-center py-3">
+                    Tidak ada hasil
+                  </div>
+                  <button v-for="l in filteredLeadPool" :key="l.lead_id"
+                          @click="modal.lead = l; leadSearch = ''"
+                          class="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-navy-700 text-left transition-colors">
+                    <span :class="fmt.priorityClass(l.prioritas)" class="text-xs flex-shrink-0">{{ l.prioritas }}</span>
+                    <span class="flex-1 text-sm text-gray-200 truncate">{{ l.nama_company }}</span>
+                    <span :class="fmt.stageClass(l.stage)" class="text-xs flex-shrink-0">{{ l.stage }}</span>
+                  </button>
                 </div>
-                <button v-for="l in filteredLeadPool" :key="l.lead_id"
-                        @click="modal.lead = l; leadSearch = ''"
-                        class="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-navy-700 text-left transition-colors">
-                  <span :class="fmt.priorityClass(l.prioritas)" class="text-xs flex-shrink-0">{{ l.prioritas }}</span>
-                  <span class="flex-1 text-sm text-gray-200 truncate">{{ l.nama_company }}</span>
-                  <span :class="fmt.stageClass(l.stage)" class="text-xs flex-shrink-0">{{ l.stage }}</span>
+              </div>
+
+              <!-- Lead terpilih -->
+              <div v-if="modal.lead" class="mb-4 p-3 rounded-xl bg-navy-800 flex items-center gap-3">
+                <div class="flex-1 min-w-0">
+                  <div class="font-semibold text-sm text-white truncate">{{ modal.lead.nama_company }}</div>
+                  <div class="text-xs text-apex-muted mt-0.5">{{ modal.lead.stage }} · {{ modal.lead.sales_owner }}</div>
+                </div>
+                <button v-if="!modal.leadFixed" @click="modal.lead = null"
+                        class="text-slate-500 hover:text-white text-xs">
+                  <i class="fa-solid fa-xmark" />
                 </button>
               </div>
             </div>
 
-            <!-- Lead terpilih -->
-            <div v-if="modal.lead" class="mb-4 p-3 rounded-xl bg-navy-800 flex items-center gap-3">
-              <div class="flex-1 min-w-0">
-                <div class="font-semibold text-sm text-white truncate">{{ modal.lead.nama_company }}</div>
-                <div class="text-xs text-apex-muted mt-0.5">{{ modal.lead.stage }} · {{ modal.lead.sales_owner }}</div>
+            <!-- ── TAB: Lead Baru ── -->
+            <div v-if="modal.tab === 'new'" class="mb-4 space-y-3">
+              <div>
+                <label class="form-label">Nama Company <span class="text-red-400">*</span></label>
+                <input v-model="newLead.nama_company" class="form-input w-full" placeholder="PT. ..." />
               </div>
-              <button v-if="!modal.leadFixed" @click="modal.lead = null"
-                      class="text-slate-500 hover:text-white text-xs">
-                <i class="fa-solid fa-xmark" />
-              </button>
+              <div class="grid grid-cols-2 gap-3">
+                <div>
+                  <label class="form-label">Prioritas</label>
+                  <select v-model="newLead.prioritas" class="form-select w-full">
+                    <option>Hot</option>
+                    <option>Warm</option>
+                    <option>Cold</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="form-label">Segmen</label>
+                  <select v-model="newLead.segmen" class="form-select w-full">
+                    <option value="">— Pilih —</option>
+                    <option v-for="s in segmens" :key="s">{{ s }}</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label class="form-label">Contact Person</label>
+                <input v-model="newLead.contact_person" class="form-input w-full" placeholder="Nama PIC" />
+              </div>
+              <div>
+                <label class="form-label">No. Telepon</label>
+                <input v-model="newLead.phone" class="form-input w-full" placeholder="08xx..." type="tel" />
+              </div>
             </div>
 
             <!-- Tanggal -->
@@ -282,7 +332,7 @@
                           ? 'border-primary-500 bg-primary-900/40 text-primary-300'
                           : 'border-slate-700 bg-navy-800 text-slate-400 hover:border-slate-500'"
                         class="flex items-center gap-2.5 px-3 py-2.5 rounded-xl border text-sm font-medium transition-colors">
-                  <i :class="`fa-solid ${ft.icon} text-base`" :style="`color:${modal.fuType === ft.value ? '' : ft.color}`" />
+                  <i :class="`${ft.brand ? 'fa-brands' : 'fa-solid'} ${ft.icon} text-base`" :style="`color:${modal.fuType === ft.value ? '' : ft.color}`" />
                   {{ ft.label }}
                 </button>
               </div>
@@ -297,7 +347,7 @@
                 <i class="fa-solid fa-calendar-xmark mr-1" />Hapus Jadwal
               </button>
               <button @click="simpanJadwal"
-                      :disabled="!modal.lead || !modal.date || modal.saving"
+                      :disabled="(modal.tab === 'pool' ? (!modal.lead || !modal.date) : !newLead.nama_company.trim()) || modal.saving"
                       class="btn-primary flex-1">
                 <i :class="modal.saving ? 'fa-solid fa-circle-notch fa-spin' : 'fa-solid fa-calendar-check'" class="mr-1" />
                 {{ modal.saving ? 'Menyimpan...' : 'Simpan' }}
@@ -315,7 +365,8 @@
 <script setup lang="ts">
 definePageMeta({ middleware: 'auth' })
 
-const { get, patch } = useApi()
+const { get, patch, post } = useApi()
+const { segmens } = useSegmen()
 const fmt = useFormat()
 
 // ── Week navigation ────────────────────────────────────────────
@@ -375,7 +426,7 @@ function leadsForDay(iso: string): any[] {
 const FU_TYPES = [
   { value: 'kunjungan', label: 'Kunjungan',  icon: 'fa-car',         color: '#34d399' },
   { value: 'meeting',   label: 'Meeting',    icon: 'fa-handshake',   color: '#60a5fa' },
-  { value: 'whatsapp',  label: 'WhatsApp',   icon: 'fa-whatsapp',    color: '#4ade80' },
+  { value: 'whatsapp',  label: 'WhatsApp',   icon: 'fa-whatsapp',    color: '#4ade80', brand: true },
   { value: 'call',      label: 'Telepon',    icon: 'fa-phone',       color: '#facc15' },
   { value: 'online',    label: 'Online',     icon: 'fa-video',       color: '#c084fc' },
   { value: 'email',     label: 'Email',      icon: 'fa-envelope',    color: '#94a3b8' },
@@ -425,6 +476,7 @@ const filteredLeadPool = computed(() => {
 // ── Modal ──────────────────────────────────────────────────────
 const modal = reactive({
   open:        false,
+  tab:         'pool' as 'pool' | 'new',
   lead:        null as any,
   leadFixed:   false,
   date:        '',
@@ -432,6 +484,14 @@ const modal = reactive({
   hasExisting: false,
   saving:      false,
   err:         '',
+})
+
+const newLead = reactive({
+  nama_company:   '',
+  prioritas:      'Warm',
+  segmen:         '',
+  contact_person: '',
+  phone:          '',
 })
 
 function openModal(lead: any | null, date: string | null) {
@@ -442,26 +502,50 @@ function openModal(lead: any | null, date: string | null) {
   modal.hasExisting = !!lead?.next_fu_date
   modal.saving      = false
   modal.err         = ''
+  modal.tab         = 'pool'
   modal.open        = true
   leadSearch.value  = ''
+  newLead.nama_company   = ''
+  newLead.prioritas      = 'Warm'
+  newLead.segmen         = ''
+  newLead.contact_person = ''
+  newLead.phone          = ''
 }
 
 function closeModal() { modal.open = false }
 
 async function simpanJadwal() {
-  if (!modal.lead || !modal.date) return
   modal.saving = true
   modal.err    = ''
   try {
-    await patch('/v1/plan/assign', {
-      lead_id:      modal.lead.lead_id,
-      next_fu_date: modal.date,
-      next_fu_type: modal.fuType,
-    })
+    if (modal.tab === 'new') {
+      if (!newLead.nama_company.trim()) { modal.err = 'Nama company wajib diisi.'; return }
+      const res = await post('/v1/pipeline', {
+        nama_company:   newLead.nama_company.trim(),
+        prioritas:      newLead.prioritas,
+        segmen:         newLead.segmen,
+        contact_person: newLead.contact_person.trim(),
+        phone:          newLead.phone.trim(),
+      }) as any
+      if (modal.date) {
+        await patch('/v1/plan/assign', {
+          lead_id:      res.lead_id,
+          next_fu_date: modal.date,
+          next_fu_type: modal.fuType,
+        })
+      }
+    } else {
+      if (!modal.lead || !modal.date) return
+      await patch('/v1/plan/assign', {
+        lead_id:      modal.lead.lead_id,
+        next_fu_date: modal.date,
+        next_fu_type: modal.fuType,
+      })
+    }
     closeModal()
     await refresh()
   } catch (e: any) {
-    modal.err = e?.data?.detail || 'Gagal menyimpan jadwal.'
+    modal.err = e?.data?.detail || 'Gagal menyimpan.'
   } finally {
     modal.saving = false
   }

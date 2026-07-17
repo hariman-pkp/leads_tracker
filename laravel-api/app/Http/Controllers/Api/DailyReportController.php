@@ -249,7 +249,7 @@ class DailyReportController extends Controller
         $managers  = DB::select("
             SELECT u.id FROM users u
             JOIN roles r ON r.id = u.role_id
-            WHERE u.is_active = 1 AND r.name IN ('Manager','Admin','admin','manager')
+            WHERE u.is_active = 1 AND LOWER(r.nama) IN ('manager','admin')
               AND u.id != ?
         ", [$auth['id']]);
 
