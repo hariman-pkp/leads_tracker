@@ -1184,6 +1184,15 @@ class _VisitHistoryCard extends StatelessWidget {
     } catch (_) { return dt; }
   }
 
+  String _fmtDuration(int? minutes) {
+    if (minutes == null) return '-';
+    final h = minutes ~/ 60;
+    final m = minutes % 60;
+    return h > 0
+        ? '${h}j ${m.toString().padLeft(2, '0')}m'
+        : '${m}m';
+  }
+
   @override
   Widget build(BuildContext context) {
     final checkinTime  = _formatTime(visit.checkedInAt);
@@ -1243,7 +1252,7 @@ class _VisitHistoryCard extends StatelessWidget {
                           borderRadius: BorderRadius.circular(4),
                         ),
                         child: Text(
-                          '${visit.durationMinutes} mnt',
+                          _fmtDuration(visit.durationMinutes),
                           style: const TextStyle(color: AppColors.primary, fontSize: 10),
                         ),
                       ),
