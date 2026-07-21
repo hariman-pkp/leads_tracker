@@ -185,7 +185,8 @@ class _CreateReportTabState extends ConsumerState<_CreateReportTab> {
 
       await repo.sendReport(id, lat: lat, lng: lng, address: address);
       ref.read(reportHistoryProvider.notifier).refresh();
-      if (mounted) setState(() { _submitted = true; _todayReport = null; });
+      await _checkTodayReport();
+      if (mounted) setState(() => _submitted = true);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -205,10 +206,18 @@ class _CreateReportTabState extends ConsumerState<_CreateReportTab> {
     }
 
     if (_submitted) {
-      return _SuccessView(onReset: () {
-        setState(() { _submitted = false; _todayReport = null; });
-        _checkTodayReport();
-      });
+      return _SentView(
+        report: _todayReport,
+        onRevise: () {
+          // Pre-fill form dengan data laporan yang sudah ada
+          if (_todayReport != null) {
+            _obstacleCtrl.text = _todayReport!.notesObstacle ?? '';
+            _planCtrl.text     = _todayReport!.notesPlan     ?? '';
+            setState(() { _mood = _todayReport!.mood; });
+          }
+          setState(() => _submitted = false);
+        },
+      );
     }
 
     // Laporan hari ini sudah ada tapi masih draft
@@ -226,6 +235,7 @@ class _CreateReportTabState extends ConsumerState<_CreateReportTab> {
             } catch (_) {}
             await repo.sendReport(_todayReport!.id, lat: lat, lng: lng, address: address);
             ref.read(reportHistoryProvider.notifier).refresh();
+            await _checkTodayReport();
             if (mounted) setState(() => _submitted = true);
           } catch (e) {
             if (mounted) ScaffoldMessenger.of(context).showSnackBar(
@@ -1197,49 +1207,132 @@ class _DraftExistsView extends StatelessWidget {
   );
 }
 
-// ── Success View ──────────────────────────────────────────────────────────────
+// ── Sent View ─────────────────────────────────────────────────────────────────
 
-class _SuccessView extends StatelessWidget {
-  final VoidCallback onReset;
-  const _SuccessView({required this.onReset});
+class _SentView extends StatelessWidget {
+  final DailyReportModel? report;
+  final VoidCallback       onRevise;
+  const _SentView({required this.onRevise, this.report});
 
   @override
-  Widget build(BuildContext context) => Center(
-    child: Padding(
-      padding: const EdgeInsets.all(32),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
+  Widget build(BuildContext context) => SingleChildScrollView(
+    padding: const EdgeInsets.all(24),
+    child: Column(
+      children: [
+        const SizedBox(height: 24),
+        Container(
+          width: 80, height: 80,
+          decoration: BoxDecoration(
+            color: AppColors.success.withAlpha(30),
+            shape: BoxShape.circle,
+          ),
+          child: const Icon(Icons.check_circle_outline,
+              color: AppColors.success, size: 44),
+        ),
+        const SizedBox(height: 16),
+        const Text('Laporan Terkirim!',
+            style: TextStyle(color: AppColors.textPrimary,
+                fontSize: 20, fontWeight: FontWeight.w700)),
+        const SizedBox(height: 6),
+        const Text('Laporan harian sudah dikirim ke Manager.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+        const SizedBox(height: 24),
+
+        // Ringkasan
+        if (report != null) ...[
           Container(
-            width: 80, height: 80,
+            padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: AppColors.success.withAlpha(30),
-              shape: BoxShape.circle,
+              color: AppColors.bg3,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.border),
             ),
-            child: const Icon(Icons.check_circle_outline, color: AppColors.success, size: 44),
+            child: Column(
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    _SummaryChip(Icons.place_outlined,
+                        '${report!.visitCount}', 'Kunjungan'),
+                    _SummaryChip(Icons.phone_outlined,
+                        '${report!.fuCount}', 'Follow-Up'),
+                    _SummaryChip(Icons.person_add_outlined,
+                        '${report!.newLeadCount}', 'Lead Baru'),
+                  ],
+                ),
+                if (report!.notesObstacle?.isNotEmpty ?? false) ...[
+                  const Divider(color: AppColors.border, height: 24),
+                  _NoteRow('🚧 Hambatan', report!.notesObstacle!),
+                ],
+                if (report!.notesPlan?.isNotEmpty ?? false) ...[
+                  const SizedBox(height: 10),
+                  _NoteRow('📅 Rencana Besok', report!.notesPlan!),
+                ],
+              ],
+            ),
           ),
           const SizedBox(height: 20),
-          const Text(
-            'Laporan Terkirim!',
-            style: TextStyle(
-              color: AppColors.textPrimary,
-              fontSize: 20,
-              fontWeight: FontWeight.w700,
+        ],
+
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: onRevise,
+            icon: const Icon(Icons.edit_outlined, size: 16),
+            label: const Text('Revisi & Kirim Ulang'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppColors.primary,
+              side: const BorderSide(color: AppColors.primary),
+              padding: const EdgeInsets.symmetric(vertical: 13),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
             ),
           ),
-          const SizedBox(height: 8),
-          const Text(
-            'Laporan harian kamu sudah berhasil\ndikirim ke Manager.',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: AppColors.textSecondary, fontSize: 14, height: 1.5),
-          ),
-          const SizedBox(height: 28),
-          ElevatedButton(
-            onPressed: onReset,
-            child: const Text('Selesai'),
-          ),
-        ],
-      ),
+        ),
+      ],
+    ),
+  );
+}
+
+class _SummaryChip extends StatelessWidget {
+  final IconData icon;
+  final String   value;
+  final String   label;
+  const _SummaryChip(this.icon, this.value, this.label);
+
+  @override
+  Widget build(BuildContext context) => Column(
+    children: [
+      Icon(icon, color: AppColors.primary, size: 20),
+      const SizedBox(height: 4),
+      Text(value,
+          style: const TextStyle(color: AppColors.textPrimary,
+              fontSize: 18, fontWeight: FontWeight.w700)),
+      Text(label,
+          style: const TextStyle(color: AppColors.textMuted, fontSize: 11)),
+    ],
+  );
+}
+
+class _NoteRow extends StatelessWidget {
+  final String label;
+  final String value;
+  const _NoteRow(this.label, this.value);
+
+  @override
+  Widget build(BuildContext context) => Align(
+    alignment: Alignment.centerLeft,
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label,
+            style: const TextStyle(color: AppColors.textMuted,
+                fontSize: 11, fontWeight: FontWeight.w600)),
+        const SizedBox(height: 3),
+        Text(value,
+            style: const TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+      ],
     ),
   );
 }
