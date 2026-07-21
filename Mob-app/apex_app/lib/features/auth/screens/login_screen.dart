@@ -19,23 +19,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _emailCtrl = TextEditingController();
   final _passCtrl  = TextEditingController();
   bool _obscure        = true;
-  bool _rememberMe     = false;
   bool _biometricAvail = false;
   bool _hasSavedToken  = false;
 
   @override
   void initState() {
     super.initState();
-    _init();
-  }
-
-  Future<void> _init() async {
-    final savedEmail = await SecureStorage.instance.getSavedEmail();
-    if (savedEmail != null && mounted) {
-      _emailCtrl.text = savedEmail;
-      setState(() => _rememberMe = true);
-    }
-    await _checkBiometric();
+    _checkBiometric();
   }
 
   Future<void> _checkBiometric() async {
@@ -66,13 +56,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   Future<void> _doLogin() async {
     if (!_formKey.currentState!.validate()) return;
-    final email = _emailCtrl.text.trim();
-    if (_rememberMe) {
-      await SecureStorage.instance.saveSavedEmail(email);
-    } else {
-      await SecureStorage.instance.clearSavedEmail();
-    }
-    await ref.read(authProvider.notifier).login(email, _passCtrl.text);
+    await ref.read(authProvider.notifier).login(
+        _emailCtrl.text.trim(), _passCtrl.text);
   }
 
   @override
@@ -214,47 +199,25 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
                 const SizedBox(height: 12),
 
-                // ── Ingat saya + Lupa password ────────────────────────────
-                Row(
-                  children: [
-                    SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: Checkbox(
-                        value: _rememberMe,
-                        onChanged: (v) =>
-                            setState(() => _rememberMe = v ?? false),
-                        activeColor: AppColors.primary,
-                        side: const BorderSide(color: AppColors.textMuted),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(4)),
+                // ── Lupa password ─────────────────────────────────────────
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const ForgotPasswordScreen(),
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    const Text(
-                      'Ingat saya',
-                      style: TextStyle(
-                          color: AppColors.textSecondary, fontSize: 13),
+                    style: TextButton.styleFrom(
+                      padding: EdgeInsets.zero,
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     ),
-                    const Spacer(),
-                    TextButton(
-                      onPressed: () => Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => const ForgotPasswordScreen(),
-                        ),
-                      ),
-                      style: TextButton.styleFrom(
-                        padding: EdgeInsets.zero,
-                        minimumSize: Size.zero,
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      ),
-                      child: const Text(
-                        'Lupa password?',
-                        style: TextStyle(
-                            color: AppColors.primary, fontSize: 13),
-                      ),
+                    child: const Text(
+                      'Lupa password?',
+                      style: TextStyle(color: AppColors.primary, fontSize: 13),
                     ),
-                  ],
+                  ),
                 ),
 
                 // ── Error ─────────────────────────────────────────────────
