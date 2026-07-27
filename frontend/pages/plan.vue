@@ -35,7 +35,10 @@
           <div v-for="l in data.overdue" :key="l.lead_id"
                class="flex items-center gap-2 px-3 py-2 rounded-xl bg-red-900/10 border border-red-900/30">
             <span :class="fmt.priorityClass(l.prioritas)" class="flex-shrink-0 text-xs">{{ l.prioritas }}</span>
-            <span class="flex-1 text-sm text-gray-200 truncate">{{ l.nama_company }}</span>
+            <div class="flex-1 min-w-0">
+              <div class="text-sm text-gray-200 truncate">{{ l.nama_company }}</div>
+              <div v-if="l.product" class="text-xs text-apex-muted truncate">{{ l.product }}</div>
+            </div>
             <span class="text-xs text-red-400 flex-shrink-0">+{{ l.days_overdue }}h</span>
             <button @click="openModal(l, null)"
                     class="w-7 h-7 rounded-full bg-primary-700 flex items-center justify-center flex-shrink-0">
@@ -117,7 +120,10 @@
             <div v-for="l in filteredUnscheduled" :key="l.lead_id"
                  class="flex items-center gap-2 p-2.5 rounded-xl bg-navy-800/40">
               <span :class="fmt.priorityClass(l.prioritas)" class="flex-shrink-0 text-xs">{{ l.prioritas }}</span>
-              <span class="flex-1 text-sm text-gray-300 truncate">{{ l.nama_company }}</span>
+              <div class="flex-1 min-w-0">
+                <div class="text-sm text-gray-300 truncate">{{ l.nama_company }}</div>
+                <div v-if="l.product" class="text-xs text-apex-muted truncate">{{ l.product }}</div>
+              </div>
               <span :class="fmt.stageClass(l.stage)" class="text-xs flex-shrink-0">{{ l.stage }}</span>
               <button @click="openModal(l, null)"
                       class="w-7 h-7 rounded-full bg-primary-700/60 hover:bg-primary-600 flex items-center justify-center flex-shrink-0 transition-colors">
@@ -189,7 +195,10 @@
                  class="flex items-center gap-2 p-2 rounded-lg bg-red-900/10 hover:bg-red-900/20 cursor-pointer transition-colors"
                  @click="openModal(l, null)">
               <span :class="fmt.priorityClass(l.prioritas)" class="text-xs flex-shrink-0">{{ l.prioritas }}</span>
-              <span class="flex-1 text-sm text-gray-200 truncate">{{ l.nama_company }}</span>
+              <div class="flex-1 min-w-0">
+                <div class="text-sm text-gray-200 truncate">{{ l.nama_company }}</div>
+                <div v-if="l.product" class="text-xs text-apex-muted truncate">{{ l.product }}</div>
+              </div>
               <span class="text-xs text-red-400 flex-shrink-0">+{{ l.days_overdue }}h</span>
               <i class="fa-solid fa-calendar-plus text-primary-400 text-xs flex-shrink-0" />
             </div>
@@ -210,7 +219,10 @@
                  class="flex items-center gap-2 p-2 rounded-lg bg-navy-800/40 hover:bg-navy-700/50 cursor-pointer transition-colors"
                  @click="openModal(l, null)">
               <span :class="fmt.priorityClass(l.prioritas)" class="text-xs flex-shrink-0">{{ l.prioritas }}</span>
-              <span class="flex-1 text-sm text-gray-300 truncate">{{ l.nama_company }}</span>
+              <div class="flex-1 min-w-0">
+                <div class="text-sm text-gray-300 truncate">{{ l.nama_company }}</div>
+                <div v-if="l.product" class="text-xs text-apex-muted truncate">{{ l.product }}</div>
+              </div>
               <span :class="fmt.stageClass(l.stage)" class="text-xs flex-shrink-0">{{ l.stage }}</span>
               <i class="fa-solid fa-calendar-plus text-primary-400 text-xs flex-shrink-0" />
             </div>
