@@ -169,6 +169,63 @@ class RevenueController extends Controller
             ->update(['status' => $status, 'risk_level' => $risk]);
     }
 
+    // ── Helper: CTE kalkulasi status & risk real-time ────────────────
+    // Menghitung ach_pct, status, risk_level langsung dari actual_revenue
+    // vs target yang sesuai per type proyek (tanpa membaca kolom status di DB).
+    private function statusCte(int $tahun, int $curMonth): string
+    {
+        return "
+        ytd_tgt AS (
+            SELECT project_id, COALESCE(SUM(CASE WHEN month_num <= {$curMonth} THEN target ELSE 0 END), 0) AS ytd
+            FROM revenue_monthly GROUP BY project_id
+        ),
+        calc AS (
+            SELECT rp.project_id,
+                   rp.actual_revenue,
+                   rp.revenue_target,
+                   rp.type,
+                   rp.project_status,
+                   CASE
+                     WHEN rp.type IN ('Bulanan','Termin') THEN COALESCE(yt.ytd, 0)
+                     ELSE rp.revenue_target
+                   END AS eff_target,
+                   CASE
+                     WHEN rp.type IN ('Bulanan','Termin') THEN
+                       CASE WHEN COALESCE(yt.ytd, 0) > 0
+                            THEN ROUND((rp.actual_revenue / COALESCE(yt.ytd,0)) * 100, 1)
+                            ELSE 0 END
+                     ELSE
+                       CASE WHEN rp.revenue_target > 0
+                            THEN ROUND((rp.actual_revenue / rp.revenue_target) * 100, 1)
+                            ELSE 0 END
+                   END AS ach_pct
+            FROM revenue_projects rp
+            LEFT JOIN ytd_tgt yt ON yt.project_id = rp.project_id
+            WHERE rp.tahun = {$tahun} AND rp.is_active = 1 AND rp.deleted_at IS NULL
+        ),
+        calc_status AS (
+            SELECT project_id, actual_revenue, revenue_target, type, project_status,
+                   eff_target, ach_pct,
+                   CASE
+                     WHEN project_status IN ('Failed','Completed') THEN project_status
+                     WHEN project_status = 'On Hold'               THEN 'At Risk'
+                     WHEN eff_target = 0                           THEN 'On Track'
+                     WHEN ach_pct >= 80                            THEN 'On Track'
+                     WHEN ach_pct >= 50                            THEN 'At Risk'
+                     ELSE                                               'Critical'
+                   END AS calc_status,
+                   CASE
+                     WHEN project_status IN ('Failed','Completed') THEN 'LOW'
+                     WHEN eff_target = 0                           THEN 'LOW'
+                     WHEN ach_pct >= 80                            THEN 'LOW'
+                     WHEN ach_pct >= 60                            THEN 'MEDIUM'
+                     WHEN ach_pct >= 30                            THEN 'HIGH'
+                     ELSE                                               'CRITICAL'
+                   END AS calc_risk
+            FROM calc
+        )";
+    }
+
     // ── Helper: bulan Januari..Desember ──────────────────────────────
     private function monthList(): array
     {
@@ -218,10 +275,12 @@ class RevenueController extends Controller
             if ($r->kategori === 'Project')   { $prjTarget = (float)$r->target; $prjActual = (float)$r->actual; }
         }
 
-        // By status (object map)
+        // By status — kalkulasi real-time
+        $cteDs = $this->statusCte($tahun, $curMonth);
         $statusRows = DB::select(
-            "SELECT status, COUNT(*) as cnt FROM revenue_projects WHERE tahun=? AND is_active=1 AND deleted_at IS NULL GROUP BY status",
-            [$tahun]
+            "WITH {$cteDs}
+             SELECT cs.calc_status AS status, COUNT(*) as cnt
+             FROM calc_status cs GROUP BY cs.calc_status"
         );
         $byStatus = [];
         foreach ($statusRows as $r) $byStatus[$r->status] = (int)$r->cnt;
@@ -261,39 +320,53 @@ class RevenueController extends Controller
                 FROM invoices
                 WHERE tahun = :yr2 AND EXTRACT(MONTH FROM invoice_date)::int <= :m2
                 GROUP BY project_id
+            ),
+            effective AS (
+                -- One Time: pakai revenue_target sebagai basis, bukan target_ytd dari monthly
+                SELECT rp.project_id,
+                       CASE WHEN rp.type IN ('One Time', 'Tahunan')
+                            THEN COALESCE(rp.revenue_target, 0)
+                            ELSE COALESCE(yt.target_ytd, 0)
+                       END AS eff_target,
+                       COALESCE(iv.billed, 0) AS billed
+                FROM revenue_projects rp
+                LEFT JOIN ytd_target yt ON yt.project_id = rp.project_id
+                LEFT JOIN inv_ytd iv    ON iv.project_id = rp.project_id
+                WHERE rp.tahun = :yr3 AND rp.is_active = 1 AND rp.deleted_at IS NULL
+                  AND rp.project_status NOT IN ('Failed', 'Completed')
             )
             SELECT rp.project_id, rp.client, rp.product, rp.organisasi, rp.pic,
-                   rp.revenue_target, rp.actual_revenue, rp.project_status,
-                   COALESCE(yt.target_ytd, 0) AS target_ytd,
-                   COALESCE(iv.billed, 0)      AS billed_ytd,
+                   rp.revenue_target, rp.actual_revenue, rp.project_status, rp.type,
+                   e.eff_target AS target_ytd,
+                   e.billed     AS billed_ytd,
                    CASE
-                     WHEN rp.project_status = 'On Hold' THEN 'At Risk'
-                     WHEN COALESCE(yt.target_ytd, 0) = 0 THEN 'Critical'
-                     WHEN COALESCE(iv.billed, 0) = 0 THEN 'Critical'
-                     WHEN COALESCE(iv.billed, 0) / COALESCE(yt.target_ytd, 1) < 0.5 THEN 'Critical'
-                     WHEN COALESCE(iv.billed, 0) / COALESCE(yt.target_ytd, 1) < 0.75 THEN 'At Risk'
+                     WHEN rp.project_status = 'On Hold'          THEN 'At Risk'
+                     WHEN e.eff_target = 0                        THEN 'Critical'
+                     WHEN e.billed = 0                            THEN 'Critical'
+                     WHEN e.billed / e.eff_target < 0.5           THEN 'Critical'
+                     WHEN e.billed / e.eff_target < 0.75          THEN 'At Risk'
                    END AS risk_label
             FROM revenue_projects rp
-            LEFT JOIN ytd_target yt ON yt.project_id = rp.project_id
-            LEFT JOIN inv_ytd iv    ON iv.project_id = rp.project_id
-            WHERE rp.tahun = :yr3 AND rp.is_active = 1 AND rp.deleted_at IS NULL
+            JOIN effective e ON e.project_id = rp.project_id
+            WHERE rp.tahun = :yr4 AND rp.is_active = 1 AND rp.deleted_at IS NULL
               AND rp.project_status NOT IN ('Failed', 'Completed')
               AND (
                 rp.project_status = 'On Hold'
-                OR COALESCE(yt.target_ytd, 0) = 0
-                OR COALESCE(iv.billed, 0) = 0
-                OR COALESCE(iv.billed, 0) / NULLIF(COALESCE(yt.target_ytd, 0), 0) < 0.75
+                OR e.eff_target = 0
+                OR e.billed = 0
+                OR e.billed / NULLIF(e.eff_target, 0) < 0.75
               )
             ORDER BY
               CASE
-                WHEN rp.project_status = 'On Hold' THEN 1
-                WHEN COALESCE(yt.target_ytd, 0) = 0 THEN 0
-                WHEN COALESCE(iv.billed, 0) = 0 THEN 0
-                WHEN COALESCE(iv.billed, 0) / NULLIF(COALESCE(yt.target_ytd, 0), 0) < 0.5 THEN 0
+                WHEN rp.project_status = 'On Hold'        THEN 1
+                WHEN e.eff_target = 0                      THEN 0
+                WHEN e.billed = 0                          THEN 0
+                WHEN e.billed / NULLIF(e.eff_target,0) < 0.5 THEN 0
                 ELSE 1
               END ASC,
-              (COALESCE(iv.billed, 0) - COALESCE(yt.target_ytd, 0)) ASC",
-            ['m1' => $curMonth, 'yr1' => $tahun, 'yr2' => $tahun, 'm2' => $curMonth, 'yr3' => $tahun]
+              (e.billed - e.eff_target) ASC",
+            ['m1' => $curMonth, 'yr1' => $tahun, 'yr2' => $tahun, 'm2' => $curMonth,
+             'yr3' => $tahun,   'yr4' => $tahun]
         );
 
         // Total billed (YTD — semua invoice tahun ini)
@@ -306,17 +379,26 @@ class RevenueController extends Controller
         $quarterRows = DB::select(
             "SELECT CEIL(rm.month_num / 3.0)::int AS quarter,
                     COALESCE(SUM(rm.target),0) as target,
-                    COALESCE(SUM(rm.actual),0) as actual
+                    COALESCE(SUM(rm.actual),0) as actual,
+                    COALESCE(SUM(inv.billed),0) as billed
              FROM revenue_monthly rm
              JOIN revenue_projects rp ON rm.project_id=rp.project_id
+             LEFT JOIN (
+                 SELECT CEIL(EXTRACT(MONTH FROM invoice_date)::int / 3.0)::int AS quarter,
+                        project_id,
+                        SUM(invoice_amount) as billed
+                 FROM invoices WHERE tahun=?
+                 GROUP BY CEIL(EXTRACT(MONTH FROM invoice_date)::int / 3.0)::int, project_id
+             ) inv ON inv.quarter = CEIL(rm.month_num / 3.0)::int AND inv.project_id = rm.project_id
              WHERE rp.tahun=? AND rp.is_active=1
              GROUP BY CEIL(rm.month_num / 3.0)::int ORDER BY quarter",
-            [$tahun]
+            [$tahun, $tahun]
         );
         $quarterTrend = array_map(fn($r) => [
             'quarter' => 'Q' . $r->quarter,
             'target'  => (float)$r->target,
             'actual'  => (float)$r->actual,
+            'billed'  => (float)$r->billed,
             'ach'     => $r->target > 0 ? round($r->actual / $r->target * 100, 1) : 0,
         ], $quarterRows);
 
@@ -384,7 +466,8 @@ class RevenueController extends Controller
              FROM revenue_projects rp
              JOIN monthly_ytd m ON m.project_id = rp.project_id
              LEFT JOIN inv_ytd i ON i.project_id = rp.project_id
-             WHERE m.collected < m.target_ytd
+             WHERE m.target_ytd > 0
+               AND m.collected < m.target_ytd * 0.9
              ORDER BY (m.collected - m.target_ytd) ASC",
             ['m1' => $curMonth, 'm2' => $curMonth, 'm3' => $curMonth,
              'yr1' => $tahun,   'yr2' => $tahun]
@@ -399,11 +482,30 @@ class RevenueController extends Controller
             'billed'        => (float)$r->billed,
             'paid'          => (float)$r->paid,
             'collected'     => (float)$r->collected,
-            'gap_billed'    => (float)$r->billed    - (float)$r->target_ytd,
-            'gap_collected' => (float)$r->collected - (float)$r->target_ytd,
+            'gap_billed'    => (float)$r->target_ytd - (float)$r->billed,
+            'gap_collected' => (float)$r->billed    - (float)$r->collected,
             'ach_pct'       => (float)$r->target_ytd > 0
                                ? round((float)$r->collected / (float)$r->target_ytd * 100, 1) : 0,
         ], $recurringBehind);
+
+        // Revenue type summary (New vs Existing)
+        $rtRows = DB::select(
+            "SELECT COALESCE(revenue_type,'Existing') AS revenue_type,
+                    COUNT(*) AS cnt,
+                    COALESCE(SUM(revenue_target),0) AS target,
+                    COALESCE(SUM(actual_revenue),0) AS actual
+             FROM revenue_projects
+             WHERE tahun=? AND is_active=1 AND deleted_at IS NULL
+             GROUP BY COALESCE(revenue_type,'Existing')",
+            [$tahun]
+        );
+        $revTypeSummary = array_map(fn($r) => [
+            'revenue_type' => $r->revenue_type,
+            'cnt'          => (int)$r->cnt,
+            'target'       => (float)$r->target,
+            'actual'       => (float)$r->actual,
+            'ach_pct'      => (float)$r->target > 0 ? round((float)$r->actual / (float)$r->target * 100, 1) : 0,
+        ], $rtRows);
 
         // Monthly trend
         $monthly = DB::select(
@@ -442,6 +544,7 @@ class RevenueController extends Controller
             'prj_actual'      => $prjActual,
             'by_status'              => $byStatus,
             'project_status_summary' => $projectStatusSummary,
+            'revenue_type_summary'   => $revTypeSummary,
             'quarter_trend'   => $quarterTrend,
             'org_breakdown'   => $orgBreakdown,
             'failed_by_org'   => $failedByOrg,
@@ -465,7 +568,8 @@ class RevenueController extends Controller
     // ══════════════════════════════════════════════════════════════════
     public function insights(Request $request)
     {
-        $tahun = (int)$request->query('tahun', now()->year);
+        $tahun    = (int)$request->query('tahun', now()->year);
+        $curMonth = now()->month;
 
         // YTD (exclude On Hold & Failed)
         $ytd = DB::selectOne(
@@ -519,18 +623,24 @@ class RevenueController extends Controller
         $amaAch    = $amaTarget > 0 ? round($amaActual / $amaTarget * 100, 1) : 0;
         $eiwAch    = $eiwTarget > 0 ? round($eiwActual / $eiwTarget * 100, 1) : 0;
 
-        // Critical count
+        // Critical count — real-time
+        $cteIns = $this->statusCte($tahun, $curMonth);
         $critCount = (int)DB::selectOne(
-            "SELECT COUNT(*) as c FROM revenue_projects WHERE tahun=? AND is_active=1 AND deleted_at IS NULL AND (status='Critical' OR risk_level='HIGH')",
-            [$tahun]
+            "WITH {$cteIns}
+             SELECT COUNT(*) as c FROM calc_status
+             WHERE calc_status IN ('Critical','At Risk') OR calc_risk IN ('HIGH','CRITICAL')"
         )->c;
 
-        // Zero realisasi
+        // Zero realisasi — risk_level real-time
         $zeroProjects = DB::select(
-            "SELECT project_id, client, product, organisasi, revenue_target, type, risk_level
-             FROM revenue_projects WHERE tahun=? AND is_active=1 AND deleted_at IS NULL AND actual_revenue=0
-               AND project_status NOT IN ('Failed', 'Completed')
-             ORDER BY revenue_target DESC",
+            "WITH {$cteIns}
+             SELECT rp.project_id, rp.client, rp.product, rp.organisasi, rp.revenue_target, rp.type,
+                    cs.calc_risk AS risk_level
+             FROM revenue_projects rp
+             JOIN calc_status cs ON cs.project_id = rp.project_id
+             WHERE rp.tahun=? AND rp.is_active=1 AND rp.deleted_at IS NULL AND rp.actual_revenue=0
+               AND rp.project_status NOT IN ('Failed', 'Completed')
+             ORDER BY rp.revenue_target DESC",
             [$tahun]
         );
 
@@ -556,28 +666,52 @@ class RevenueController extends Controller
         );
 
         // Berapa bulan sudah lewat & berapa yang miss target
-        $curMonth  = now()->month;
         $pastMonths = array_filter($monthly, fn($m) => (int)$m->month_num <= $curMonth);
         $missMonths = array_filter($pastMonths, fn($m) => (float)$m->actual < (float)$m->target * 0.8);
         $achMonths  = array_filter($pastMonths, fn($m) => (float)$m->actual >= (float)$m->target);
 
-        // By status breakdown
+        // Quarter trend
+        $quarterRows = DB::select(
+            "SELECT CEIL(rm.month_num / 3.0)::int AS quarter,
+                    COALESCE(SUM(rm.target),0) as target,
+                    COALESCE(SUM(rm.actual),0) as actual,
+                    COALESCE(SUM(inv.billed),0) as billed
+             FROM revenue_monthly rm
+             JOIN revenue_projects rp ON rm.project_id=rp.project_id
+             LEFT JOIN (
+                 SELECT CEIL(EXTRACT(MONTH FROM invoice_date)::int / 3.0)::int AS quarter,
+                        project_id,
+                        SUM(invoice_amount) as billed
+                 FROM invoices WHERE tahun=?
+                 GROUP BY CEIL(EXTRACT(MONTH FROM invoice_date)::int / 3.0)::int, project_id
+             ) inv ON inv.quarter = CEIL(rm.month_num / 3.0)::int AND inv.project_id = rm.project_id
+             WHERE rp.tahun=? AND rp.is_active=1
+             GROUP BY CEIL(rm.month_num / 3.0)::int ORDER BY quarter",
+            [$tahun, $tahun]
+        );
+        $quarterTrend = array_map(fn($r) => [
+            'quarter' => 'Q' . $r->quarter,
+            'target'  => (float)$r->target,
+            'actual'  => (float)$r->actual,
+            'billed'  => (float)$r->billed,
+            'ach'     => $r->target > 0 ? round($r->actual / $r->target * 100, 1) : 0,
+        ], $quarterRows);
+
+        // By status breakdown — real-time
         $statusRows = DB::select(
-            "SELECT status, COUNT(*) as cnt,
-                    COALESCE(SUM(revenue_target),0) as target,
-                    COALESCE(SUM(actual_revenue),0)  as actual
-             FROM revenue_projects WHERE tahun=? AND is_active=1 AND deleted_at IS NULL
-             GROUP BY status ORDER BY cnt DESC",
-            [$tahun]
+            "WITH {$cteIns}
+             SELECT cs.calc_status AS status, COUNT(*) as cnt,
+                    COALESCE(SUM(cs.revenue_target),0) as target,
+                    COALESCE(SUM(cs.actual_revenue),0)  as actual
+             FROM calc_status cs GROUP BY cs.calc_status ORDER BY cnt DESC"
         );
 
-        // By risk level
+        // By risk level — real-time
         $riskRows = DB::select(
-            "SELECT risk_level, COUNT(*) as cnt,
-                    COALESCE(SUM(revenue_target),0) as target
-             FROM revenue_projects WHERE tahun=? AND is_active=1 AND deleted_at IS NULL
-             GROUP BY risk_level ORDER BY cnt DESC",
-            [$tahun]
+            "WITH {$cteIns}
+             SELECT cs.calc_risk AS risk_level, COUNT(*) as cnt,
+                    COALESCE(SUM(cs.revenue_target),0) as target
+             FROM calc_status cs GROUP BY cs.calc_risk ORDER BY cnt DESC"
         );
 
         // By type (kontribusi realisasi)
@@ -591,21 +725,109 @@ class RevenueController extends Controller
             [$tahun]
         );
 
-        // Top 5 kontributor realisasi
+        // Top 5 kontributor realisasi — status/risk real-time
         $topContributors = DB::select(
-            "SELECT project_id, client, product, organisasi, actual_revenue, revenue_target, status, risk_level
-             FROM revenue_projects WHERE tahun=? AND is_active=1 AND deleted_at IS NULL AND actual_revenue>0
-             ORDER BY actual_revenue DESC LIMIT 5",
+            "WITH {$cteIns}
+             SELECT rp.project_id, rp.client, rp.product, rp.organisasi,
+                    rp.actual_revenue, rp.revenue_target,
+                    cs.calc_status AS status, cs.calc_risk AS risk_level
+             FROM revenue_projects rp
+             JOIN calc_status cs ON cs.project_id = rp.project_id
+             WHERE rp.tahun=? AND rp.is_active=1 AND rp.deleted_at IS NULL AND rp.actual_revenue>0
+             ORDER BY rp.actual_revenue DESC LIMIT 5",
             [$tahun]
         );
 
-        // Proyek Critical/At Risk dengan nilai terbesar (perlu perhatian)
+        // Proyek Critical/At Risk — real-time
         $atRiskProjects = DB::select(
-            "SELECT project_id, client, product, organisasi, revenue_target, actual_revenue,
-                    status, risk_level, action_required
-             FROM revenue_projects
-             WHERE tahun=? AND is_active=1 AND deleted_at IS NULL AND status IN ('Critical','At Risk')
-             ORDER BY revenue_target DESC LIMIT 8",
+            "WITH {$cteIns}
+             SELECT rp.project_id, rp.client, rp.product, rp.organisasi,
+                    rp.revenue_target, rp.actual_revenue, rp.action_required,
+                    rp.revenue_type,
+                    cs.calc_status AS status, cs.calc_risk AS risk_level
+             FROM revenue_projects rp
+             JOIN calc_status cs ON cs.project_id = rp.project_id
+             WHERE cs.calc_status IN ('Critical','At Risk')
+             ORDER BY rp.revenue_target DESC LIMIT 8"
+        );
+
+        // Recurring behind YTD
+        $recurringBehind = DB::select(
+            "WITH monthly_ytd AS (
+                 SELECT rm.project_id,
+                        COALESCE(SUM(CASE WHEN rm.month_num <= :m1 THEN rm.target ELSE 0 END),0) AS target_ytd,
+                        COALESCE(SUM(CASE WHEN rm.month_num <= :m2 THEN rm.actual ELSE 0 END),0) AS collected
+                 FROM revenue_monthly rm
+                 JOIN revenue_projects rp ON rp.project_id = rm.project_id
+                 WHERE rp.tahun = :yr1 AND rp.is_active = 1 AND rp.kategori = 'Recurring'
+                   AND rp.deleted_at IS NULL AND rp.project_status NOT IN ('On Hold','Failed')
+                 GROUP BY rm.project_id
+             ),
+             inv_ytd AS (
+                 SELECT project_id,
+                        COALESCE(SUM(invoice_amount),0) AS billed,
+                        COALESCE(SUM(paid_amount),0)    AS paid
+                 FROM invoices
+                 WHERE tahun = :yr2 AND EXTRACT(MONTH FROM invoice_date)::int <= :m3
+                 GROUP BY project_id
+             )
+             SELECT rp.project_id, rp.product, rp.client, rp.pic, rp.revenue_target,
+                    m.target_ytd, m.collected,
+                    COALESCE(i.billed,0) AS billed,
+                    COALESCE(i.paid,0)   AS paid
+             FROM revenue_projects rp
+             JOIN monthly_ytd m ON m.project_id = rp.project_id
+             LEFT JOIN inv_ytd i ON i.project_id = rp.project_id
+             WHERE m.target_ytd > 0
+               AND m.collected < m.target_ytd * 0.9
+             ORDER BY (m.collected - m.target_ytd) ASC",
+            ['m1' => $curMonth, 'm2' => $curMonth, 'm3' => $curMonth,
+             'yr1' => $tahun,   'yr2' => $tahun]
+        );
+        $recurringBehindMapped = array_map(fn($r) => [
+            'project_id'    => $r->project_id,
+            'product'       => $r->product,
+            'client'        => $r->client,
+            'pic'           => $r->pic,
+            'revenue_target'=> (float)$r->revenue_target,
+            'target_ytd'    => (float)$r->target_ytd,
+            'billed'        => (float)$r->billed,
+            'paid'          => (float)$r->paid,
+            'collected'     => (float)$r->collected,
+            'gap_billed'    => (float)$r->target_ytd - (float)$r->billed,
+            'gap_collected' => (float)$r->billed    - (float)$r->collected,
+            'ach_pct'       => (float)$r->target_ytd > 0
+                               ? round((float)$r->collected / (float)$r->target_ytd * 100, 1) : 0,
+        ], $recurringBehind);
+
+        // By revenue_type breakdown
+        $revenueTypeRows = DB::select(
+            "WITH {$cteIns}
+             SELECT COALESCE(rp.revenue_type,'Existing') AS revenue_type,
+                    COUNT(*) as cnt,
+                    COALESCE(SUM(rp.revenue_target),0) as target,
+                    COALESCE(SUM(rp.actual_revenue),0)  as actual
+             FROM revenue_projects rp
+             JOIN calc_status cs ON cs.project_id = rp.project_id
+             WHERE rp.tahun=? AND rp.is_active=1 AND rp.deleted_at IS NULL
+               AND rp.project_status IN ('Active','Completed')
+             GROUP BY COALESCE(rp.revenue_type,'Existing')",
+            [$tahun]
+        );
+        $rtMap = [];
+        foreach ($revenueTypeRows as $r) $rtMap[$r->revenue_type] = $r;
+
+        // Status distribution per revenue_type (real-time)
+        $statusByTypeRows = DB::select(
+            "WITH {$cteIns}
+             SELECT COALESCE(rp.revenue_type,'Existing') AS revenue_type,
+                    cs.calc_status AS status,
+                    COUNT(*) as cnt
+             FROM revenue_projects rp
+             JOIN calc_status cs ON cs.project_id = rp.project_id
+             WHERE rp.tahun=? AND rp.is_active=1 AND rp.deleted_at IS NULL
+               AND rp.project_status IN ('Active','Completed')
+             GROUP BY COALESCE(rp.revenue_type,'Existing'), cs.calc_status",
             [$tahun]
         );
 
@@ -657,6 +879,7 @@ class RevenueController extends Controller
                 'actual'     => (float)$r->actual,
                 'is_past'    => (int)$r->month_num <= $curMonth,
             ], $monthly),
+            'quarter_trend'       => array_values($quarterTrend),
             'gap_ytd'             => round($gap),
             'gap_pct'             => $gapPct,
             'run_rate'            => $runRate,
@@ -696,6 +919,20 @@ class RevenueController extends Controller
                 'revenue_target' => (float)$r->revenue_target,
                 'actual_revenue' => (float)$r->actual_revenue,
             ]), $atRiskProjects),
+            'recurring_behind'    => $recurringBehindMapped,
+            // Revenue type breakdown
+            'revenue_type_summary' => array_map(fn($r) => [
+                'revenue_type' => $r->revenue_type,
+                'cnt'    => (int)$r->cnt,
+                'target' => (float)$r->target,
+                'actual' => (float)$r->actual,
+                'ach'    => (float)$r->target > 0 ? round((float)$r->actual / (float)$r->target * 100, 1) : 0,
+            ], $revenueTypeRows),
+            'status_by_revenue_type' => array_map(fn($r) => [
+                'revenue_type' => $r->revenue_type,
+                'status'       => $r->status,
+                'cnt'          => (int)$r->cnt,
+            ], $statusByTypeRows),
         ]);
     }
 
@@ -733,12 +970,17 @@ class RevenueController extends Controller
         $totalPages = (int)ceil($total / $perPage);
         $offset     = ($page - 1) * $perPage;
 
+        $cte = $this->statusCte($tahun, (int)date('n'));
         $rows = DB::select(
-            "SELECT project_id, lob, organisasi, product, client, kategori, type,
-                    target_invoice_date,
-                    revenue_target, actual_revenue, achievement_pct, status, risk_level, notes,
-                    project_status
-             FROM revenue_projects WHERE $whereClause ORDER BY project_id
+            "WITH {$cte}
+             SELECT rp.project_id, rp.lob, rp.organisasi, rp.product, rp.client, rp.kategori, rp.type,
+                    rp.target_invoice_date, rp.revenue_type, rp.tahun,
+                    rp.revenue_target, rp.actual_revenue, cs.ach_pct AS achievement_pct,
+                    cs.calc_status AS status, cs.calc_risk AS risk_level, rp.notes,
+                    rp.project_status
+             FROM revenue_projects rp
+             JOIN calc_status cs ON cs.project_id = rp.project_id
+             WHERE $whereClause ORDER BY rp.project_id
              LIMIT ? OFFSET ?",
             array_merge($params, [$perPage, $offset])
         );
@@ -949,6 +1191,7 @@ class RevenueController extends Controller
                     'risk_level'           => $r->risk_level,
                     'notes'                => $r->notes,
                     'project_status'       => $r->project_status ?? 'Active',
+                    'revenue_type'         => $r->revenue_type ?? 'Existing',
                     'inv'                  => $invMap[$r->project_id] ?? null,
                 ];
             }, $rows),
@@ -961,8 +1204,9 @@ class RevenueController extends Controller
     public function storeProject(Request $request)
     {
         $d = $request->only(['lob','organisasi','product','client','kategori','type',
-                             'target_invoice_date','tahun','revenue_target','notes']);
+                             'target_invoice_date','tahun','revenue_target','notes','revenue_type']);
         if (empty($d['target_invoice_date'])) unset($d['target_invoice_date']);
+        if (empty($d['revenue_type'])) $d['revenue_type'] = 'Existing';
         $d['actual_revenue']  = 0;
         $d['status']          = 'On Track';
         $d['risk_level']      = 'LOW';
@@ -1008,7 +1252,7 @@ class RevenueController extends Controller
 
         $allowed = ['lob','organisasi','product','client','kategori','type',
                     'target_invoice_date','tahun',
-                    'revenue_target','actual_revenue','notes','project_status'];
+                    'revenue_target','actual_revenue','notes','project_status','revenue_type'];
 
         $d = $request->only($allowed);
         if (isset($d['target_invoice_date']) && empty($d['target_invoice_date'])) {
@@ -1674,7 +1918,8 @@ class RevenueController extends Controller
 
         $d = $request->only([
             'project_id','lob','organisasi','product','client',
-            'invoice_no','invoice_date','period','invoice_amount','tahun','notes'
+            'invoice_no','invoice_date','period','invoice_amount','tahun','notes',
+            'paid_amount','paid_date'
         ]);
 
         // Auto-fill dari project jika project_id berubah

@@ -60,6 +60,46 @@
         </div>
       </div>
 
+      <!-- REKOMENDASI AKSI -->
+      <div v-if="rekom" class="card mb-5">
+        <div class="section-title text-primary-400 mb-3">
+          <i class="fa-solid fa-crosshairs mr-1.5" />Rekomendasi Aksi
+          <span class="ml-2 text-xs text-apex-muted font-normal">({{ rekom.items?.length }} item)</span>
+        </div>
+        <div v-if="rekom.items?.length" class="space-y-2">
+          <NuxtLink v-for="(item, i) in rekom.items" :key="i"
+            :to="`/pipeline/${item.lead_id}`"
+            class="flex items-center gap-3 p-2.5 rounded-lg bg-navy-800/40 hover:bg-navy-700/50 transition-colors cursor-pointer">
+            <div :class="[
+              'w-7 h-7 rounded-full flex items-center justify-center text-xs flex-shrink-0',
+              item.priority === 'critical' ? 'bg-red-900/60' :
+              item.priority === 'high'     ? 'bg-orange-900/60' :
+              item.priority === 'medium'   ? 'bg-amber-900/60' : 'bg-blue-900/60'
+            ]">
+              <i :class="`fa-solid ${item.icon} ${item.color}`" />
+            </div>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-2 mb-0.5">
+                <span :class="[
+                  'text-xs px-1.5 py-0.5 rounded font-medium',
+                  item.priority === 'critical' ? 'bg-red-900/50 text-red-300' :
+                  item.priority === 'high'     ? 'bg-orange-900/50 text-orange-300' :
+                  item.priority === 'medium'   ? 'bg-amber-900/50 text-amber-300' : 'bg-blue-900/50 text-blue-300'
+                ]">{{ item.label }}</span>
+                <span :class="fmt.priorityClass(item.prioritas)" class="text-xs">{{ item.prioritas }}</span>
+                <span class="text-sm font-medium text-gray-200 truncate">{{ item.nama_company }}</span>
+              </div>
+              <div class="text-xs text-apex-muted">{{ item.action }}</div>
+            </div>
+            <i class="fa-solid fa-chevron-right text-xs text-apex-muted flex-shrink-0" />
+          </NuxtLink>
+        </div>
+        <div v-else class="flex items-center gap-3 py-4">
+          <i class="fa-solid fa-circle-check text-emerald-400 text-xl" />
+          <span class="text-sm text-gray-400">Tidak ada item yang perlu perhatian hari ini.</span>
+        </div>
+      </div>
+
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
 
         <!-- OVERDUE -->
@@ -102,6 +142,7 @@
           <div v-if="data.due_today?.length" class="space-y-2">
             <div v-for="l in dueTodaySlice" :key="l.lead_id"
                  class="flex items-center gap-3 p-2.5 rounded-lg bg-yellow-900/10 border border-yellow-900/30 hover:border-yellow-700/50 transition-colors">
+              <i :class="fuTypeIcon(l.next_fu_type)" class="text-base flex-shrink-0 w-4 text-center" :title="fuTypeLabel(l.next_fu_type)" />
               <div class="flex-1 min-w-0">
                 <div class="flex items-center gap-2 mb-0.5">
                   <span :class="fmt.priorityClass(l.prioritas)" class="flex-shrink-0">{{ l.prioritas }}</span>
@@ -136,6 +177,7 @@
           <div v-if="data.upcoming?.length" class="space-y-1.5">
             <div v-for="l in upcomingSlice" :key="l.lead_id"
                  class="flex items-center gap-3 py-2 border-b border-navy-800 last:border-0">
+              <i :class="fuTypeIcon(l.next_fu_type)" class="text-sm flex-shrink-0 w-4 text-center" :title="fuTypeLabel(l.next_fu_type)" />
               <div class="flex-1 min-w-0">
                 <div class="flex items-center gap-2">
                   <span :class="fmt.priorityClass(l.prioritas)" class="flex-shrink-0">{{ l.prioritas }}</span>
@@ -201,7 +243,26 @@
 definePageMeta({ middleware: 'auth' })
 const { get } = useApi()
 const fmt = useFormat()
-const { data, pending, refresh } = await useAsyncData('today', () => get('/v1/today'), { server: false })
+
+const FU_TYPE_ICON: Record<string, string> = {
+  kunjungan: 'fa-solid fa-car text-emerald-400',
+  meeting:   'fa-solid fa-handshake text-blue-400',
+  online:    'fa-solid fa-video text-purple-400',
+  whatsapp:  'fa-brands fa-whatsapp text-green-400',
+  call:      'fa-solid fa-phone text-yellow-400',
+}
+const FU_TYPE_LABEL: Record<string, string> = {
+  kunjungan: 'Kunjungan', meeting: 'Meeting', online: 'Online',
+  whatsapp: 'WhatsApp', call: 'Call',
+}
+function fuTypeIcon(t: string) { return FU_TYPE_ICON[t] ?? FU_TYPE_ICON.call }
+function fuTypeLabel(t: string) { return FU_TYPE_LABEL[t] ?? t }
+const { data, pending, refresh: refreshToday } = await useAsyncData('today', () => get('/v1/today'), { server: false })
+const { data: rekom, refresh: refreshRekom } = await useAsyncData('fokus', () => get('/v1/recommendations/daily'), { server: false })
+
+async function refresh() {
+  await Promise.all([refreshToday(), refreshRekom()])
+}
 
 const PER = 5
 

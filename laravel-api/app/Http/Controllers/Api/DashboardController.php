@@ -271,4 +271,152 @@ class DashboardController extends Controller
             'target_month'    => $targetMonth,
         ]);
     }
+
+    public function dailyRecommendations(Request $request)
+    {
+        $auth      = $request->attributes->get('auth_user', []);
+        $isSales   = $auth['is_sales_only'] ?? false;
+        $authNama  = $auth['nama'] ?? '';
+
+        $sf  = $isSales ? " AND sales_owner = ?" : "";
+        $sfP = $isSales ? [$authNama] : [];
+        $today = now()->toDateString();
+
+        $items = [];
+
+        // 1. FU hari ini
+        $fuToday = DB::select(
+            "SELECT lead_id, nama_company, prioritas, next_fu_type, propose_value, product
+             FROM leads WHERE next_fu_date = ? AND stage NOT IN ('Won','Lost') $sf
+             ORDER BY prioritas DESC, nama_company ASC LIMIT 10",
+            array_merge([$today], $sfP)
+        );
+        foreach ($fuToday as $l) {
+            $items[] = [
+                'type'        => 'fu_today',
+                'priority'    => 'high',
+                'lead_id'     => $l->lead_id,
+                'nama_company'=> $l->nama_company,
+                'product'     => $l->product,
+                'prioritas'   => $l->prioritas,
+                'action'      => "Lakukan FU via " . ($l->next_fu_type ?: 'WhatsApp'),
+                'label'       => 'FU Hari Ini',
+                'icon'        => 'fa-bolt',
+                'color'       => 'text-yellow-400',
+            ];
+        }
+
+        // 2. Overdue FU
+        $overdue = DB::select(
+            "SELECT lead_id, nama_company, prioritas, next_fu_date, propose_value, product,
+                    (CURRENT_DATE - next_fu_date::date) as days_overdue
+             FROM leads WHERE next_fu_date < ? AND stage NOT IN ('Won','Lost') $sf
+             ORDER BY days_overdue DESC, prioritas DESC LIMIT 10",
+            array_merge([$today], $sfP)
+        );
+        foreach ($overdue as $l) {
+            $items[] = [
+                'type'        => 'overdue',
+                'priority'    => $l->days_overdue >= 7 ? 'critical' : 'high',
+                'lead_id'     => $l->lead_id,
+                'nama_company'=> $l->nama_company,
+                'product'     => $l->product,
+                'prioritas'   => $l->prioritas,
+                'action'      => "FU terlewat {$l->days_overdue} hari — segera hubungi",
+                'label'       => 'Overdue',
+                'icon'        => 'fa-clock',
+                'color'       => 'text-red-400',
+            ];
+        }
+
+        // 3. Hot leads tanpa jadwal FU
+        $hotUnscheduled = DB::select(
+            "SELECT lead_id, nama_company, prioritas, last_fu_date, propose_value, product
+             FROM leads WHERE next_fu_date IS NULL AND prioritas = 'Hot'
+               AND stage NOT IN ('Won','Lost') $sf
+             ORDER BY nama_company ASC LIMIT 5",
+            $sfP
+        );
+        foreach ($hotUnscheduled as $l) {
+            $items[] = [
+                'type'        => 'hot_unscheduled',
+                'priority'    => 'high',
+                'lead_id'     => $l->lead_id,
+                'nama_company'=> $l->nama_company,
+                'product'     => $l->product,
+                'prioritas'   => $l->prioritas,
+                'action'      => "Lead Hot belum punya jadwal FU — jadwalkan segera",
+                'label'       => 'Perlu Dijadwalkan',
+                'icon'        => 'fa-fire',
+                'color'       => 'text-orange-400',
+            ];
+        }
+
+        // 4. Leads Negotiation/Proposal tidak disentuh > 7 hari
+        $stale = DB::select(
+            "SELECT lead_id, nama_company, prioritas, last_fu_date, stage, propose_value, product,
+                    (CURRENT_DATE - last_fu_date::date) as days_stale
+             FROM leads WHERE stage IN ('Negotiation','Proposal')
+               AND last_fu_date IS NOT NULL
+               AND (CURRENT_DATE - last_fu_date::date) > 7
+               AND stage NOT IN ('Won','Lost') $sf
+             ORDER BY days_stale DESC LIMIT 5",
+            $sfP
+        );
+        foreach ($stale as $l) {
+            $items[] = [
+                'type'        => 'stale',
+                'priority'    => 'medium',
+                'lead_id'     => $l->lead_id,
+                'nama_company'=> $l->nama_company,
+                'product'     => $l->product,
+                'prioritas'   => $l->prioritas,
+                'action'      => "Di stage {$l->stage}, tidak ada update sejak {$l->days_stale} hari lalu",
+                'label'       => 'Perlu Update',
+                'icon'        => 'fa-triangle-exclamation',
+                'color'       => 'text-amber-400',
+            ];
+        }
+
+        // 5. Warm leads tidak disentuh > 14 hari tanpa jadwal
+        $warmCold = DB::select(
+            "SELECT lead_id, nama_company, prioritas, last_fu_date, propose_value, product,
+                    (CURRENT_DATE - last_fu_date::date) as days_stale
+             FROM leads WHERE prioritas IN ('Warm','Hot') AND next_fu_date IS NULL
+               AND last_fu_date IS NOT NULL
+               AND (CURRENT_DATE - last_fu_date::date) > 14
+               AND stage NOT IN ('Won','Lost') $sf
+             ORDER BY prioritas DESC, days_stale DESC LIMIT 5",
+            $sfP
+        );
+        foreach ($warmCold as $l) {
+            $items[] = [
+                'type'        => 'warm_stale',
+                'priority'    => 'low',
+                'lead_id'     => $l->lead_id,
+                'nama_company'=> $l->nama_company,
+                'product'     => $l->product,
+                'prioritas'   => $l->prioritas,
+                'action'      => "Belum ada kontak sejak {$l->days_stale} hari — pertimbangkan re-engage",
+                'label'       => 'Sudah Lama',
+                'icon'        => 'fa-rotate-left',
+                'color'       => 'text-blue-400',
+            ];
+        }
+
+        // Urutkan: critical → high → medium → low
+        $order = ['critical' => 0, 'high' => 1, 'medium' => 2, 'low' => 3];
+        usort($items, fn($a, $b) => ($order[$a['priority']] ?? 9) - ($order[$b['priority']] ?? 9));
+
+        return response()->json([
+            'date'  => $today,
+            'items' => $items,
+            'summary' => [
+                'fu_today'   => count($fuToday),
+                'overdue'    => count($overdue),
+                'unscheduled'=> count($hotUnscheduled),
+                'stale'      => count($stale),
+            ],
+        ]);
+    }
 }

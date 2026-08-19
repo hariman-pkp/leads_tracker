@@ -6,7 +6,8 @@
  */
 
 export const GROUP_ORDER = [
-  'Aktivitas',
+  'Follow-Up',
+  'Lapangan',
   'Pipeline CRM',
   'Entertain',
   'Revenue LOB',
@@ -15,12 +16,14 @@ export const GROUP_ORDER = [
 ]
 
 const ALL_MENUS = [
-  { key: 'today',        label: 'Hari Ini',          url: '/today',            icon: 'fa-bolt',           group: 'Aktivitas'    },
-  { key: 'schedule',     label: 'FU Schedule',        url: '/schedule',         icon: 'fa-calendar-check', group: 'Aktivitas'    },
-  { key: 'followup',     label: 'Follow-Up Log',      url: '/followup',         icon: 'fa-phone-alt',      group: 'Aktivitas'    },
-  { key: 'field_activity', label: 'Field Activity',   url: '/field-activity',   icon: 'fa-map-location-dot', group: 'Aktivitas'  },
-  { key: 'field_monitor', label: 'Field Monitor',    url: '/field-monitor',    icon: 'fa-chart-line',       group: 'Aktivitas'  },
-  { key: 'daily_report',  label: 'Laporan Harian',   url: '/daily-report',     icon: 'fa-clipboard-list',   group: 'Aktivitas'  },
+  { key: 'today',          label: 'Hari Ini',       url: '/today',          icon: 'fa-bolt',             group: 'Follow-Up' },
+  { key: 'calendar',       label: 'Kalender FU',    url: '/calendar',       icon: 'fa-calendar-days',    group: 'Follow-Up' },
+  { key: 'plan',           label: 'Weekly Planner', url: '/plan',           icon: 'fa-table-columns',    group: 'Follow-Up' },
+  { key: 'followup',       label: 'Log FU',         url: '/followup',       icon: 'fa-phone-alt',        group: 'Follow-Up' },
+  { key: 'field_activity', label: 'Field Activity', url: '/field-activity', icon: 'fa-map-location-dot', group: 'Lapangan'  },
+  { key: 'field_monitor',  label: 'Field Monitor',  url: '/field-monitor',  icon: 'fa-chart-line',       group: 'Lapangan'  },
+  { key: 'daily_report',   label: 'Laporan Harian', url: '/daily-report',   icon: 'fa-clipboard-list',   group: 'Lapangan'  },
+  { key: 'command_center', label: 'Command Center',   url: '/command-center',   icon: 'fa-gauge-high',     group: 'Pipeline CRM' },
   { key: 'dashboard',    label: 'Dashboard',          url: '/',                 icon: 'fa-tachometer-alt', group: 'Pipeline CRM' },
   { key: 'pipeline',     label: 'Pipeline',           url: '/pipeline',         icon: 'fa-funnel-dollar',  group: 'Pipeline CRM' },
   { key: 'contacts',     label: 'Contacts',           url: '/contacts',         icon: 'fa-address-book',   group: 'Pipeline CRM' },
@@ -46,7 +49,7 @@ const ALL_MENUS = [
   { key: 'roles',        label: 'Role & Menu',        url: '/roles',            icon: 'fa-shield-alt',     group: 'Master Data'  },
   { key: 'users',        label: 'Master Users',       url: '/users',            icon: 'fa-user-cog',       group: 'Master Data'  },
   { key: 'settings',    label: 'Pengaturan',         url: '/settings',         icon: 'fa-gear',           group: 'Master Data'  },
-  { key: 'cleansing',  label: 'Data Cleansing',     url: '/admin/cleansing',  icon: 'fa-broom',          group: 'Master Data'  },
+  { key: 'cleansing',  label: 'Data Cleansing',     url: '/admin/cleansing',  icon: 'fa-broom',          group: 'Utilitas'     },
   { key: 'entertain',          label: 'Dashboard Entertain', url: '/entertain',          icon: 'fa-utensils',       group: 'Entertain'    },
   { key: 'entertain_claims',   label: 'Klaim Saya',          url: '/entertain/claims',   icon: 'fa-receipt',        group: 'Entertain'    },
   { key: 'entertain_approval', label: 'Approval Klaim',      url: '/entertain/approval', icon: 'fa-circle-check',   group: 'Entertain'    },

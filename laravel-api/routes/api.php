@@ -30,6 +30,7 @@ use App\Http\Controllers\Api\ProfileController;
 use App\Http\Controllers\Api\AnnualTargetController;
 use App\Http\Controllers\Api\ShareLinkController;
 use App\Http\Controllers\Api\VisitPlanController;
+use App\Http\Controllers\Api\ActivityHeatmapController;
 
 // ── PUBLIC SHARE LINKS (no auth) ──────────────────────────────────────────
 Route::get ('/v1/public/annual-target/{token}',          [ShareLinkController::class, 'checkToken']);
@@ -61,6 +62,8 @@ Route::middleware('jwt')->group(function () {
     // Dashboard
     Route::get('/v1/dashboard', [DashboardController::class, 'index'])
          ->middleware('jwt:dashboard');
+    Route::get('/v1/recommendations/daily', [DashboardController::class, 'dailyRecommendations']);
+    Route::get('/v1/command-center',        [\App\Http\Controllers\Api\CommandCenterController::class, 'index']);
 
     // Pipeline Forecast — harus sebelum /pipeline/{leadId}
     Route::get('/v1/pipeline/forecast', [ForecastController::class, 'index'])
@@ -294,6 +297,10 @@ Route::middleware('jwt')->group(function () {
     Route::post('/v1/share-links/annual-target/generate',    [ShareLinkController::class, 'generateAnnualTarget'])   ->middleware('jwt:rev_annual_target');
     Route::get ('/v1/share-links/revenue-dashboard',         [ShareLinkController::class, 'getDashboard'])           ->middleware('jwt:revenue');
     Route::post('/v1/share-links/revenue-dashboard/generate',[ShareLinkController::class, 'generateDashboard'])      ->middleware('jwt:revenue');
+
+    // Activity Heatmap
+    Route::get('/v1/activity-heatmap', [ActivityHeatmapController::class, 'index'])
+         ->middleware('jwt:pipeline');
 
     // Export Data
     Route::get('/v1/export/pipeline',            [ExportController::class, 'pipelineCsv'])        ->middleware('jwt:pipeline');

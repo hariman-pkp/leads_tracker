@@ -334,6 +334,14 @@
               <label class="form-label">Tahun</label>
               <input v-model.number="editInv.tahun" type="number" class="form-input" />
             </div>
+            <div>
+              <label class="form-label">Jumlah Terbayar (Rp)</label>
+              <NumericInput v-model="editInv.paid_amount" class="form-input" />
+            </div>
+            <div>
+              <label class="form-label">Tgl Bayar</label>
+              <input v-model="editInv.paid_date" type="date" class="form-input" />
+            </div>
           </div>
           <div v-if="editError"
                class="flex items-center gap-2 bg-red-900/40 border border-red-700/50 rounded-lg px-3 py-2 text-xs text-red-300">
@@ -577,6 +585,8 @@ const editInv      = reactive({
   period        : '',
   invoice_amount: 0,
   tahun         : new Date().getFullYear(),
+  paid_amount   : 0,
+  paid_date     : '',
 })
 
 function openEdit(inv: any) {
@@ -588,6 +598,8 @@ function openEdit(inv: any) {
     period        : inv.period || months[new Date().getMonth()],
     invoice_amount: inv.invoice_amount || 0,
     tahun         : inv.tahun || new Date().getFullYear(),
+    paid_amount   : inv.paid_amount || 0,
+    paid_date     : inv.paid_date ? inv.paid_date.slice(0, 10) : '',
   })
   editError.value   = ''
   showEditForm.value = true
