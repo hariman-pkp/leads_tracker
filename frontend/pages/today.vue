@@ -88,6 +88,7 @@
                 ]">{{ item.label }}</span>
                 <span :class="fmt.priorityClass(item.prioritas)" class="text-xs">{{ item.prioritas }}</span>
                 <span class="text-sm font-medium text-gray-200 truncate">{{ item.nama_company }}</span>
+                <span v-if="item.product" class="text-xs text-apex-muted truncate">· {{ item.product }}</span>
               </div>
               <div class="text-xs text-apex-muted">{{ item.action }}</div>
             </div>
