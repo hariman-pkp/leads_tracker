@@ -22,7 +22,7 @@ class TodayController extends Controller
         // Overdue FU
         $overdue = DB::select("
             SELECT lead_id, nama_company, stage, prioritas, product,
-                   next_fu_date, last_fu_date, last_fu_notes, sales_owner,
+                   next_fu_date, next_fu_type, last_fu_date, last_fu_notes, sales_owner,
                    propose_value,
                    (CURRENT_DATE - next_fu_date::date) as days_overdue
             FROM leads
@@ -34,21 +34,21 @@ class TodayController extends Controller
         // Due today
         $dueToday = DB::select("
             SELECT lead_id, nama_company, stage, prioritas, product,
-                   next_fu_date, last_fu_date, last_fu_notes, sales_owner, propose_value
+                   next_fu_date, next_fu_type, last_fu_date, last_fu_notes, sales_owner, propose_value
             FROM leads
             WHERE next_fu_date = ? AND stage NOT IN ('Won','Lost') $sf
-            ORDER BY prioritas DESC",
+            ORDER BY next_fu_type DESC, prioritas DESC",
             $salesOnly ? [$today, $salesName] : [$today]
         );
 
         // Upcoming 7 days (excluding today)
         $upcoming = DB::select("
             SELECT lead_id, nama_company, stage, prioritas, product,
-                   next_fu_date, last_fu_date, last_fu_notes, sales_owner, propose_value
+                   next_fu_date, next_fu_type, last_fu_date, last_fu_notes, sales_owner, propose_value
             FROM leads
             WHERE next_fu_date > ? AND next_fu_date <= ?
               AND stage NOT IN ('Won','Lost') $sf
-            ORDER BY next_fu_date ASC, prioritas DESC",
+            ORDER BY next_fu_date ASC, next_fu_type DESC, prioritas DESC",
             $salesOnly ? [$today, $week, $salesName] : [$today, $week]
         );
 

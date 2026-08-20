@@ -7,19 +7,24 @@
 export function useApi() {
   const config  = useRuntimeConfig()
   const auth    = useAuthStore()
-  // SSR: pakai URL internal langsung ke FastAPI (relative URL tidak bisa resolve di server)
-  // Client: pakai /api-proxy yang diforward oleh Nuxt dev server
-  const baseURL = import.meta.server
-    ? ((config.apiBaseServer as string) || 'http://localhost:8001/api')
-    : (config.public.apiBase as string)
+
+  const serverURL = (config.apiBaseServer as string) || 'http://localhost:8001/api'
+  const clientURL = config.public.apiBase as string  // '/api-proxy'
 
   /**
-   * Core fetch — tambah JWT header secara otomatis
+   * Core fetch — tambah JWT header secara otomatis.
+   * Mutation (POST/PUT/PATCH/DELETE) selalu pakai clientURL (proxy ke Laravel)
+   * karena tidak boleh dijalankan server-side.
+   * GET boleh pakai serverURL saat SSR untuk data fetching.
    */
   async function apiFetch<T = any>(
     path: string,
     options: Parameters<typeof $fetch>[1] = {}
   ): Promise<T> {
+    const method = ((options.method as string) || 'GET').toUpperCase()
+    const isMutation = method === 'POST' || method === 'PUT' || method === 'PATCH' || method === 'DELETE'
+    const baseURL = (isMutation || !import.meta.server) ? clientURL : serverURL
+
     const headers: Record<string, string> = {
       ...(options.headers as Record<string, string> || {}),
     }
@@ -43,13 +48,16 @@ export function useApi() {
 
   // Convenience methods
   const get  = <T = any>(path: string, query?: Record<string, any>) =>
-    apiFetch<T>(path, { method: 'GET', query })
+    apiFetch<T>(path, { method: 'GET', query, cache: 'no-store' as RequestCache })
 
   const post = <T = any>(path: string, body: any) =>
     apiFetch<T>(path, { method: 'POST', body })
 
-  const put  = <T = any>(path: string, body: any) =>
+  const put   = <T = any>(path: string, body: any) =>
     apiFetch<T>(path, { method: 'PUT', body })
+
+  const patch = <T = any>(path: string, body: any) =>
+    apiFetch<T>(path, { method: 'PATCH', body })
 
   const del  = <T = any>(path: string) =>
     apiFetch<T>(path, { method: 'DELETE' })
@@ -58,6 +66,7 @@ export function useApi() {
    * Download file as Blob (for template downloads)
    */
   async function getBlob(path: string): Promise<Blob> {
+    const baseURL = getBaseURL()
     const headers: Record<string, string> = {}
     if (auth.token) headers['Authorization'] = `Bearer ${auth.token}`
     const res = await fetch(`${baseURL}${path}`, { headers })
@@ -69,6 +78,7 @@ export function useApi() {
    * POST with FormData (for file upload)
    */
   async function postForm<T = any>(path: string, formData: FormData): Promise<T> {
+    const baseURL = getBaseURL()
     const headers: Record<string, string> = {}
     if (auth.token) headers['Authorization'] = `Bearer ${auth.token}`
     const res = await fetch(`${baseURL}${path}`, {
@@ -86,5 +96,5 @@ export function useApi() {
     return json as T
   }
 
-  return { get, post, put, del, apiFetch, getBlob, postForm }
+  return { get, post, put, patch, del, apiFetch, getBlob, postForm }
 }

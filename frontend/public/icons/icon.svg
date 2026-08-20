@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="80" fill="#162032"/>
+  <rect x="80" y="80" width="352" height="352" rx="48" fill="#29ABE2" opacity="0.15"/>
+  <text x="256" y="290" font-family="Arial Black, sans-serif" font-size="160" font-weight="900" fill="#29ABE2" text-anchor="middle">A</text>
+  <text x="256" y="400" font-family="Arial, sans-serif" font-size="60" font-weight="700" fill="#8BA3B8" text-anchor="middle">APEX</text>
+</svg>

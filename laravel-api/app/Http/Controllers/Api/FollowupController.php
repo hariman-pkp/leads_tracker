@@ -59,12 +59,15 @@ class FollowupController extends Controller
             ]
         );
 
-        // Update lead last_fu_date and next_fu_date
+        // Update lead last_fu_date, next_fu_date, next_fu_type
+        $nextFuType = $d['next_fu_type'] ?? 'call';
         DB::update(
-            "UPDATE leads SET last_fu_date=?, next_fu_date=?, updated_at=NOW() WHERE lead_id=?",
+            "UPDATE leads SET last_fu_date=?, next_fu_date=?, next_fu_type=?, last_fu_notes=?, updated_at=NOW() WHERE lead_id=?",
             [
                 $d['tgl_fu'] ?? $d['fu_date'] ?? now()->toDateString(),
                 $d['tgl_fu_berikut'] ?? $d['next_date'] ?? null,
+                $nextFuType,
+                $d['hasil_fu'] ?? $d['summary'] ?? null,
                 $leadId,
             ]
         );
@@ -72,33 +75,47 @@ class FollowupController extends Controller
         return response()->json(['message' => 'Follow-up berhasil disimpan.', 'fu_id' => $fuId], 201);
     }
 
-    // GET /v1/followup?today=1&limit=20&offset=0
+    // GET /v1/followup
     public function index(Request $request)
     {
-        $auth    = $request->attributes->get('auth_user', []);
-        $today   = $request->boolean('today');
-        $limit   = (int) $request->query('limit', 50);
-        $offset  = (int) $request->query('offset', 0);
-        $search  = trim($request->query('search', ''));
-        $leadId  = trim($request->query('lead_id', ''));
+        $auth      = $request->attributes->get('auth_user', []);
+        $isSales   = $auth['is_sales_only'] ?? false;
+        $authNama  = $auth['nama'] ?? '';
+
+        $page      = max(1, (int) $request->query('page', 1));
+        $perPage   = min(100, max(10, (int) $request->query('per_page', 25)));
+        $offset    = ($page - 1) * $perPage;
+        $search    = trim($request->query('search', ''));
+        $leadId    = trim($request->query('lead_id', ''));
+        $dateFrom  = $request->query('date_from', '');
+        $dateTo    = $request->query('date_to', '');
+        $salesOwner = $request->query('sales_owner', '');
 
         $where  = ['1=1'];
         $params = [];
 
         // Sales hanya lihat FU miliknya
-        if ($auth['is_sales_only'] ?? false) {
+        if ($isSales) {
             $where[]  = 'f.sales_owner = ?';
-            $params[] = $auth['nama'] ?? '';
-        }
-
-        if ($today) {
-            $where[]  = 'f.tgl_fu_berikut = ?';
-            $params[] = now()->toDateString();
+            $params[] = $authNama;
+        } elseif ($salesOwner !== '') {
+            $where[]  = 'f.sales_owner = ?';
+            $params[] = $salesOwner;
         }
 
         if ($leadId !== '') {
             $where[]  = 'f.lead_id = ?';
             $params[] = $leadId;
+        }
+
+        if ($dateFrom !== '') {
+            $where[]  = 'f.tgl_fu >= ?';
+            $params[] = $dateFrom;
+        }
+
+        if ($dateTo !== '') {
+            $where[]  = 'f.tgl_fu <= ?';
+            $params[] = $dateTo;
         }
 
         if ($search !== '') {
@@ -110,60 +127,37 @@ class FollowupController extends Controller
 
         $whereStr = implode(' AND ', $where);
 
+        $total = DB::selectOne(
+            "SELECT COUNT(*) as cnt FROM follow_up_log f WHERE $whereStr",
+            $params
+        )->cnt;
+
         $rows = DB::select("
             SELECT f.fu_id, f.lead_id, f.nama_company, f.sales_owner,
                    f.tgl_fu, f.metode_fu, f.hasil_fu, f.catatan_fu,
                    f.next_action, f.tgl_fu_berikut, f.status, f.stage_saat_fu,
-                   l.stage, l.prioritas, l.contact_person
+                   l.stage, l.prioritas, l.contact_person, l.next_fu_type
             FROM follow_up_log f
             LEFT JOIN leads l ON l.lead_id = f.lead_id
             WHERE $whereStr
-            ORDER BY f.tgl_fu DESC
+            ORDER BY f.tgl_fu DESC, f.id DESC
             LIMIT ? OFFSET ?
-        ", array_merge($params, [$limit, $offset]));
+        ", array_merge($params, [$perPage, $offset]));
 
-        $leads = DB::select("
-            SELECT DISTINCT f.lead_id, f.nama_company
-            FROM follow_up_log f
-            ORDER BY f.nama_company
-        ");
-
-        $salesWhere = ($auth['is_sales_only'] ?? false) ? "AND l.sales_owner = ?" : '';
-        $salesParam = ($auth['is_sales_only'] ?? false) ? [$auth['nama'] ?? ''] : [];
-        $today      = now()->toDateString();
-
-        // FU hari ini: next_fu_date = hari ini
-        $fuToday = DB::select("
-            SELECT l.lead_id, l.nama_company, l.contact_person,
-                   l.stage, l.prioritas, l.next_fu_date, l.sales_owner,
-                   l.last_fu_notes
-            FROM leads l
-            WHERE l.next_fu_date = ?
-              AND l.stage NOT IN ('Won','Lost')
-              $salesWhere
-            ORDER BY l.prioritas DESC
-            LIMIT 50
-        ", array_merge([$today], $salesParam));
-
-        // Overdue FU: next_fu_date < hari ini
-        $overdueFu = DB::select("
-            SELECT l.lead_id, l.nama_company, l.contact_person,
-                   l.stage, l.prioritas, l.next_fu_date, l.sales_owner,
-                   l.last_fu_notes
-            FROM leads l
-            WHERE l.next_fu_date < ?
-              AND l.stage NOT IN ('Won','Lost')
-              $salesWhere
-            ORDER BY l.next_fu_date ASC
-            LIMIT 50
-        ", array_merge([$today], $salesParam));
+        // by_date untuk kalender overlay
+        $byDate = [];
+        foreach ($rows as $r) {
+            $key = $r->tgl_fu ?? 'unknown';
+            $byDate[$key][] = (array)$r;
+        }
 
         return response()->json([
-            'total'      => count($rows),
-            'logs'       => array_map(fn($r) => (array)$r, $rows),
-            'leads'      => array_map(fn($r) => (array)$r, $leads),
-            'today_due'  => array_map(fn($r) => (array)$r, $fuToday),
-            'overdue'    => array_map(fn($r) => (array)$r, $overdueFu),
+            'total'       => (int)$total,
+            'page'        => $page,
+            'per_page'    => $perPage,
+            'total_pages' => (int)ceil($total / $perPage),
+            'logs'        => array_map(fn($r) => (array)$r, $rows),
+            'by_date'     => $byDate,
         ]);
     }
 

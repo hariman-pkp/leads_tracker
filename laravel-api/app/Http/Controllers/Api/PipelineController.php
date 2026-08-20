@@ -18,14 +18,15 @@ class PipelineController extends Controller
     public function index(Request $request)
     {
         $auth       = $this->authUser($request);
-        $q          = $request->query('q', '');
+        $q          = $request->query('q', '') ?: $request->query('search', '');
         $stage      = $request->query('stage', '');
         $sales      = $request->query('sales', '');
         $segmen     = $request->query('segmen', '');
         $organisasi = $request->query('organisasi', '');
         $product    = $request->query('product', '');
-        $limit      = (int) $request->query('limit', 50);
-        $offset     = (int) $request->query('offset', 0);
+        $page       = max(1, (int) $request->query('page', 1));
+        $perPage    = min(200, max(1, (int) $request->query('per_page', $request->query('limit', 25))));
+        $offset     = ($page - 1) * $perPage;
 
         $where  = ['1=1'];
         $params = [];
@@ -67,7 +68,7 @@ class PipelineController extends Controller
 
         $rows = DB::select(
             "SELECT * FROM leads WHERE $whereStr ORDER BY updated_at DESC LIMIT ? OFFSET ?",
-            array_merge($params, [$limit, $offset])
+            array_merge($params, [$perPage, $offset])
         );
 
         $total = (int) DB::selectOne(
@@ -85,9 +86,12 @@ class PipelineController extends Controller
         }
 
         return response()->json([
-            'total'      => $total,
-            'leads'      => array_map(fn($r) => $this->normLead((array) $r), $rows),
-            'sales_list' => $salesList,
+            'total'       => $total,
+            'page'        => $page,
+            'per_page'    => $perPage,
+            'total_pages' => max(1, (int) ceil($total / $perPage)),
+            'leads'       => array_map(fn($r) => $this->normLead((array) $r), $rows),
+            'sales_list'  => $salesList,
         ]);
     }
 
@@ -198,7 +202,7 @@ class PipelineController extends Controller
             'nama_company','contact_person','phone','email','segmen','sub_segmen','source',
             'stage','prioritas','tgl_masuk','propose_value','deal_value',
             'probability','exp_close_date','sales_owner','organisasi','last_fu_notes',
-            'next_fu_date','last_fu_date','weighted_value','product','remarks',
+            'next_fu_date','last_fu_date','weighted_value','product','remarks','loss_reason',
         ];
 
         // Sales tidak boleh mengubah sales_owner

@@ -34,13 +34,12 @@ class JwtMiddleware
             [$user->role_id]
         );
         $allowedMenus = array_column($menus, 'menu_key');
+        $roleId = (int) $user->role_id;
 
-        // Check menu permission
-        if ($menu && !in_array($menu, $allowedMenus)) {
+        // Check menu permission (admin bypasses all menu checks)
+        if ($menu && $roleId !== 1 && !in_array($menu, $allowedMenus)) {
             return response()->json(['detail' => "Akses ke menu '$menu' tidak diizinkan."], 403);
         }
-
-        $roleId = (int) $user->role_id;
 
         $request->attributes->set('auth_user', [
             'id'            => $user->id,

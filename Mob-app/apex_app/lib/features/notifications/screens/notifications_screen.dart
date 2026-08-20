@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import '../../../core/constants/api_constants.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../entertain/models/claim_model.dart';
@@ -483,6 +484,26 @@ class _ApprovalCard extends ConsumerWidget {
               overflow: TextOverflow.ellipsis,
             ),
           ],
+          if (claim.fotoBukti != null) ...[
+            const SizedBox(height: 8),
+            GestureDetector(
+              onTap: () => _showPhotoViewer(context, claim.fotoBukti!),
+              child: Row(
+                children: [
+                  const Icon(Icons.attach_file,
+                      size: 14, color: AppColors.primary),
+                  const SizedBox(width: 4),
+                  const Text(
+                    'Lihat Lampiran',
+                    style: TextStyle(
+                        color: AppColors.primary,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500),
+                  ),
+                ],
+              ),
+            ),
+          ],
           const SizedBox(height: 12),
           // Action buttons
           Row(
@@ -509,6 +530,64 @@ class _ApprovalCard extends ConsumerWidget {
             ],
           ),
         ],
+      ),
+    );
+  }
+
+  void _showPhotoViewer(BuildContext context, String fotoBukti) {
+    final url = '${ApiConstants.baseUrl}/v1/static/$fotoBukti';
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.black,
+        insetPadding: EdgeInsets.zero,
+        child: Stack(
+          children: [
+            InteractiveViewer(
+              minScale: 0.5,
+              maxScale: 4.0,
+              child: Image.network(
+                url,
+                fit: BoxFit.contain,
+                width: double.infinity,
+                height: double.infinity,
+                loadingBuilder: (_, child, progress) => progress == null
+                    ? child
+                    : const Center(
+                        child: CircularProgressIndicator(
+                            color: AppColors.primary)),
+                errorBuilder: (_, __, ___) => const Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.broken_image,
+                          color: Colors.white54, size: 56),
+                      SizedBox(height: 8),
+                      Text('Gagal memuat gambar',
+                          style: TextStyle(color: Colors.white54)),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              top: 12,
+              right: 12,
+              child: GestureDetector(
+                onTap: () => Navigator.pop(ctx),
+                child: Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: Colors.black54,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: const Icon(Icons.close,
+                      color: Colors.white, size: 20),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

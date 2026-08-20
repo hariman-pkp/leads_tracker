@@ -10,74 +10,73 @@ class ScheduleController extends Controller
 {
     public function index(Request $request)
     {
-        $days  = (int)$request->query('days', 14);
-        $today = now()->toDateString();
-        $end   = now()->addDays($days)->toDateString();
+        $today    = now()->toDateString();
+        $dateFrom = $request->query('date_from') ?? $today;
+        $dateTo   = $request->query('date_to')   ?? now()->addDays((int)$request->query('days', 14))->toDateString();
 
-        $auth        = $request->attributes->get('auth_user', []);
-        $salesOnly   = $auth['is_sales_only'] ?? false;
-        $salesOwner  = $auth['nama'] ?? null;
-        $salesFilter = $salesOnly ? " AND sales_owner = ?" : "";
+        $auth       = $request->attributes->get('auth_user', []);
+        $salesOnly  = $auth['is_sales_only'] ?? false;
+        $salesOwner = $auth['nama'] ?? null;
 
-        // Overdue (next_fu_date < today, not Won/Lost)
-        $overdueParams = $salesOnly ? [$today, $salesOwner] : [$today];
-        $overdue = DB::select(
-            "SELECT lead_id, nama_company, stage, prioritas, product,
-                    next_fu_date, sales_owner,
-                    COALESCE(propose_value, 0) as propose_value,
-                    'Overdue' as fu_status
+        // Manager boleh filter per sales
+        $filterSales = $salesOnly
+            ? $salesOwner
+            : ($request->query('sales_owner') ?: null);
+
+        $sf     = $filterSales ? " AND sales_owner = ?" : "";
+        $cols   = "lead_id, nama_company, stage, prioritas, product,
+                   next_fu_date, next_fu_type, last_fu_notes, sales_owner,
+                   COALESCE(propose_value, 0) as propose_value";
+
+        // Overdue (hanya jika dateFrom <= today)
+        $overdue = [];
+        if ($dateFrom <= $today) {
+            $p = $filterSales ? [$dateFrom, $salesOwner] : [$dateFrom];
+            $overdue = DB::select(
+                "SELECT $cols, 'Overdue' as fu_status,
+                        (CURRENT_DATE - next_fu_date::date) as days_overdue
+                 FROM leads
+                 WHERE next_fu_date < ? AND next_fu_date IS NOT NULL
+                   AND stage NOT IN ('Won','Lost') $sf
+                 ORDER BY next_fu_date ASC",
+                $p
+            );
+        }
+
+        // In range
+        $p = $filterSales ? [$dateFrom, $dateTo, $filterSales] : [$dateFrom, $dateTo];
+        $inRange = DB::select(
+            "SELECT $cols,
+                    CASE WHEN next_fu_date = ? THEN 'Today' ELSE 'Upcoming' END as fu_status,
+                    NULL::int as days_overdue
              FROM leads
-             WHERE next_fu_date < ?
-               AND next_fu_date IS NOT NULL
-               AND stage NOT IN ('Won','Lost')
-               $salesFilter
-             ORDER BY next_fu_date ASC",
-            $overdueParams
-        );
-
-        // Today
-        $todayParams = $salesOnly ? [$today, $salesOwner] : [$today];
-        $todayRows = DB::select(
-            "SELECT lead_id, nama_company, stage, prioritas, product,
-                    next_fu_date, sales_owner,
-                    COALESCE(propose_value, 0) as propose_value,
-                    'Today' as fu_status
-             FROM leads
-             WHERE next_fu_date = ?
-               AND stage NOT IN ('Won','Lost')
-               $salesFilter
-             ORDER BY prioritas DESC",
-            $todayParams
-        );
-
-        // Upcoming
-        $upcomingParams = $salesOnly ? [$today, $end, $salesOwner] : [$today, $end];
-        $upcoming = DB::select(
-            "SELECT lead_id, nama_company, stage, prioritas, product,
-                    next_fu_date, sales_owner,
-                    COALESCE(propose_value, 0) as propose_value,
-                    'Upcoming' as fu_status
-             FROM leads
-             WHERE next_fu_date > ?
-               AND next_fu_date <= ?
-               AND stage NOT IN ('Won','Lost')
-               $salesFilter
+             WHERE next_fu_date >= ? AND next_fu_date <= ?
+               AND stage NOT IN ('Won','Lost') $sf
              ORDER BY next_fu_date ASC, prioritas DESC",
-            $upcomingParams
+            $filterSales
+                ? [$today, $dateFrom, $dateTo, $filterSales]
+                : [$today, $dateFrom, $dateTo]
         );
 
         $all = array_merge(
             array_map(fn($r) => (array)$r, $overdue),
-            array_map(fn($r) => (array)$r, $todayRows),
-            array_map(fn($r) => (array)$r, $upcoming)
+            array_map(fn($r) => (array)$r, $inRange)
         );
 
+        // Group by date untuk calendar view
+        $byDate = [];
+        foreach ($all as $row) {
+            $key = $row['next_fu_date'] ?? 'overdue';
+            $byDate[$key][] = $row;
+        }
+
         return response()->json([
-            'from'     => $today,
-            'to'       => $end,
-            'days'     => $days,
+            'from'     => $dateFrom,
+            'to'       => $dateTo,
+            'today'    => $today,
             'total'    => count($all),
             'schedule' => $all,
+            'by_date'  => $byDate,
         ]);
     }
 }

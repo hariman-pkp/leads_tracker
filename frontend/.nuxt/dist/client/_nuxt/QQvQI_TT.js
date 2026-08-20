@@ -1,1 +1,0 @@
-import{ao as o,x as a,E as n}from"./B_8yGqKr.js";const r=o(e=>{const t=a();if(t.init(),e.path!=="/login"&&!t.isLoggedIn)return n(`/login?redirect=${encodeURIComponent(e.fullPath)}`)});export{r as default};

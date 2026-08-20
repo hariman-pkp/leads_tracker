@@ -322,6 +322,14 @@
     </div>
 
     <div v-if="data" class="card overflow-x-auto" :class="pending ? 'opacity-70' : ''">
+      <div class="flex items-center justify-between mb-3">
+        <div class="section-title mb-0">Daftar Proyek</div>
+        <button @click="showProjectListInfo = true"
+          class="w-6 h-6 rounded-full flex items-center justify-center text-gray-400 hover:text-primary-400 hover:bg-apex-border transition"
+          title="Penjelasan kolom">
+          <i class="fa-solid fa-circle-info text-sm" />
+        </button>
+      </div>
       <table class="tbl">
         <thead>
           <tr>
@@ -396,12 +404,12 @@
                 <div class="flex items-center gap-1.5">
                   <div class="flex-1 h-1.5 bg-navy-700 rounded overflow-hidden">
                     <div class="h-full rounded transition-all"
-                         :class="fmt.achBgColor(p.is_ytd ? p.ytd_ach_pct : p.achievement_pct * 100)"
-                         :style="`width:${Math.min(p.is_ytd ? p.ytd_ach_pct : p.achievement_pct * 100, 100)}%`" />
+                         :class="fmt.achBgColor(p.is_ytd ? p.ytd_ach_pct : p.achievement_pct)"
+                         :style="`width:${Math.min(p.is_ytd ? p.ytd_ach_pct : p.achievement_pct, 100)}%`" />
                   </div>
                   <span class="text-xs w-9 text-right flex-shrink-0"
-                        :class="fmt.achColor(p.is_ytd ? p.ytd_ach_pct : p.achievement_pct * 100)">
-                    {{ (p.is_ytd ? p.ytd_ach_pct : p.achievement_pct * 100).toFixed(0) }}%
+                        :class="fmt.achColor(p.is_ytd ? p.ytd_ach_pct : p.achievement_pct)">
+                    {{ (p.is_ytd ? p.ytd_ach_pct : p.achievement_pct).toFixed(0) }}%
                   </span>
                 </div>
                 <div v-if="p.is_ytd" class="text-xs text-gray-600 mt-0.5 leading-tight">
@@ -1269,6 +1277,13 @@
               </select>
             </div>
             <div>
+              <label class="form-label">Revenue Stream</label>
+              <select v-model="newProj.revenue_type" class="form-select">
+                <option value="Existing">Existing Revenue</option>
+                <option value="New">New Revenue Stream</option>
+              </select>
+            </div>
+            <div>
               <label class="form-label">Type</label>
               <select v-model="newProj.type" class="form-select" @change="onNewProjTypeChange">
                 <option>One Time</option><option>Termin</option><option>Bulanan</option><option>Tahunan</option>
@@ -1477,6 +1492,13 @@
               </select>
             </div>
             <div>
+              <label class="form-label">Revenue Stream</label>
+              <select v-model="editModal.revenue_type" class="form-select">
+                <option value="Existing">Existing Revenue</option>
+                <option value="New">New Revenue Stream</option>
+              </select>
+            </div>
+            <div>
               <label class="form-label">Type</label>
               <select v-model="editModal.type" class="form-select">
                 <option>One Time</option><option>Termin</option><option>Bulanan</option><option>Tahunan</option>
@@ -1533,6 +1555,147 @@
     </div>
 
   </div>
+
+  <!-- Modal: Penjelasan Kolom List Proyek -->
+  <Teleport to="body">
+    <Transition name="fade">
+      <div v-if="showProjectListInfo"
+           class="fixed inset-0 z-[9999] flex items-center justify-center p-4"
+           @click.self="showProjectListInfo = false">
+        <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" @click="showProjectListInfo = false" />
+        <div class="relative bg-apex-surface border border-apex-border rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+          <!-- Header -->
+          <div class="flex items-center justify-between px-5 py-4 border-b border-apex-border">
+            <div class="flex items-center gap-2">
+              <i class="fa-solid fa-table-list text-primary-400" />
+              <span class="font-semibold text-apex-text">Penjelasan Kolom — Daftar Proyek</span>
+            </div>
+            <button @click="showProjectListInfo = false"
+              class="w-7 h-7 rounded-full flex items-center justify-center text-gray-400 hover:text-white hover:bg-apex-border transition">
+              <i class="fa-solid fa-xmark" />
+            </button>
+          </div>
+
+          <!-- Body -->
+          <div class="px-5 py-4 space-y-5 text-sm">
+
+            <!-- Kolom data -->
+            <div>
+              <div class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Kolom Data</div>
+              <div class="space-y-1.5 text-xs">
+                <div class="p-2.5 rounded-lg bg-apex-card border border-apex-border flex gap-3">
+                  <span class="text-gray-300 font-semibold w-28 flex-shrink-0">Target</span>
+                  <span class="text-gray-400">Nilai kontrak / target revenue tahunan proyek.</span>
+                </div>
+                <div class="p-2.5 rounded-lg bg-apex-card border border-apex-border flex gap-3">
+                  <span class="text-amber-300 font-semibold w-28 flex-shrink-0">Billed</span>
+                  <span class="text-gray-400">Total invoice yang sudah diterbitkan. Tanggung jawab <span class="text-white">Tim Project</span>.</span>
+                </div>
+                <div class="p-2.5 rounded-lg bg-apex-card border border-apex-border flex gap-3">
+                  <span class="text-green-300 font-semibold w-28 flex-shrink-0">Collected</span>
+                  <span class="text-gray-400">Realisasi revenue yang sudah masuk & dicatat. Tanggung jawab <span class="text-white">Finance</span>.</span>
+                </div>
+                <div class="p-2.5 rounded-lg bg-apex-card border border-apex-border flex gap-3">
+                  <span class="text-blue-300 font-semibold w-28 flex-shrink-0">Ach. %</span>
+                  <span class="text-gray-400">Achievement = Collected ÷ Target efektif × 100%. Dihitung real-time.</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Status Revenue -->
+            <div>
+              <div class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Status Revenue (real-time)</div>
+              <div class="space-y-1.5 text-xs">
+                <div class="p-2.5 rounded-lg bg-emerald-900/20 border border-emerald-700/30 flex items-center gap-3">
+                  <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-900/50 text-emerald-300 w-20 text-center flex-shrink-0">On Track</span>
+                  <span class="text-gray-400">Achievement ≥ 80% dari target efektif.</span>
+                </div>
+                <div class="p-2.5 rounded-lg bg-amber-900/20 border border-amber-700/30 flex items-center gap-3">
+                  <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-900/50 text-amber-300 w-20 text-center flex-shrink-0">At Risk</span>
+                  <span class="text-gray-400">Achievement 50–79%. Perlu perhatian agar tidak turun ke Critical.</span>
+                </div>
+                <div class="p-2.5 rounded-lg bg-red-900/20 border border-red-700/30 flex items-center gap-3">
+                  <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-red-900/50 text-red-300 w-20 text-center flex-shrink-0">Critical</span>
+                  <span class="text-gray-400">Achievement &lt; 50%. Perlu tindakan segera.</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Target Efektif per Type -->
+            <div>
+              <div class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Basis Target per Type Kontrak</div>
+              <div class="space-y-1.5 text-xs">
+                <div class="p-2.5 rounded-lg bg-apex-card border border-apex-border flex gap-3">
+                  <span class="text-purple-300 font-semibold w-20 flex-shrink-0">Bulanan</span>
+                  <span class="text-gray-400">Target kumulatif dari jadwal bulanan s.d. bulan berjalan.</span>
+                </div>
+                <div class="p-2.5 rounded-lg bg-apex-card border border-apex-border flex gap-3">
+                  <span class="text-purple-300 font-semibold w-20 flex-shrink-0">Termin</span>
+                  <span class="text-gray-400">Target kumulatif dari jadwal termin s.d. bulan berjalan.</span>
+                </div>
+                <div class="p-2.5 rounded-lg bg-apex-card border border-apex-border flex gap-3">
+                  <span class="text-purple-300 font-semibold w-20 flex-shrink-0">One Time</span>
+                  <span class="text-gray-400">Target penuh = nilai kontrak (revenue_target).</span>
+                </div>
+                <div class="p-2.5 rounded-lg bg-apex-card border border-apex-border flex gap-3">
+                  <span class="text-purple-300 font-semibold w-20 flex-shrink-0">Tahunan</span>
+                  <span class="text-gray-400">Target penuh = nilai kontrak (revenue_target).</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Risk Level -->
+            <div>
+              <div class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Risk Level</div>
+              <div class="grid grid-cols-2 gap-1.5 text-xs">
+                <div class="p-2 rounded-lg bg-emerald-900/20 border border-emerald-700/30 text-center">
+                  <div class="text-emerald-300 font-bold text-[10px]">LOW</div>
+                  <div class="text-gray-500 text-[10px]">Ach ≥ 80%</div>
+                </div>
+                <div class="p-2 rounded-lg bg-yellow-900/20 border border-yellow-700/30 text-center">
+                  <div class="text-yellow-300 font-bold text-[10px]">MEDIUM</div>
+                  <div class="text-gray-500 text-[10px]">Ach 60–79%</div>
+                </div>
+                <div class="p-2 rounded-lg bg-orange-900/20 border border-orange-700/30 text-center">
+                  <div class="text-orange-300 font-bold text-[10px]">HIGH</div>
+                  <div class="text-gray-500 text-[10px]">Ach 30–59%</div>
+                </div>
+                <div class="p-2 rounded-lg bg-red-900/20 border border-red-700/30 text-center">
+                  <div class="text-red-300 font-bold text-[10px]">CRITICAL</div>
+                  <div class="text-gray-500 text-[10px]">Ach &lt; 30%</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Project Status -->
+            <div>
+              <div class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Project Status</div>
+              <div class="space-y-1.5 text-xs">
+                <div class="p-2.5 rounded-lg bg-apex-card border border-apex-border flex gap-3">
+                  <span class="text-green-300 font-semibold w-20 flex-shrink-0">Active</span>
+                  <span class="text-gray-400">Proyek sedang berjalan.</span>
+                </div>
+                <div class="p-2.5 rounded-lg bg-apex-card border border-apex-border flex gap-3">
+                  <span class="text-yellow-300 font-semibold w-20 flex-shrink-0">On Hold</span>
+                  <span class="text-gray-400">Proyek ditangguhkan sementara, otomatis masuk At Risk.</span>
+                </div>
+                <div class="p-2.5 rounded-lg bg-apex-card border border-apex-border flex gap-3">
+                  <span class="text-blue-300 font-semibold w-20 flex-shrink-0">Completed</span>
+                  <span class="text-gray-400">Proyek selesai, tidak dihitung dalam status revenue.</span>
+                </div>
+                <div class="p-2.5 rounded-lg bg-apex-card border border-apex-border flex gap-3">
+                  <span class="text-red-300 font-semibold w-20 flex-shrink-0">Failed</span>
+                  <span class="text-gray-400">Proyek gagal, dikecualikan dari kalkulasi target.</span>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </Transition>
+  </Teleport>
+
 </template>
 
 <script setup lang="ts">
@@ -1629,12 +1792,13 @@ async function updateProjectStatus(projectId: string, newStatus: string) {
   }
 }
 
+const showProjectListInfo = ref(false)
 const showNewForm = ref(false)
 const saving      = ref(false)
 function makeNewProj() {
   return {
     lob: 'DCSS', organisasi: 'FSP-ECO', product: '', client: '', kategori: 'Project',
-    type: 'One Time' as string,
+    type: 'One Time' as string, revenue_type: 'Existing',
     tgl_penagihan_pertama: '',
     revenue_target: 0, notes: '',
     termins: [{ month: new Date().getMonth() + 1, pct: 100 }] as { month: number, pct: number }[],
@@ -1688,7 +1852,7 @@ async function submitProject() {
 const editModal = reactive({
   show: false, project_id: '',
   client: '', product: '', organisasi: '', lob: '',
-  kategori: 'Project', type: 'One Time',
+  kategori: 'Project', type: 'One Time', revenue_type: 'Existing',
   target_invoice_date: '',
   tahun: new Date().getFullYear(), revenue_target: 0,
   status: 'On Track', risk_level: 'LOW', notes: '',
@@ -1712,6 +1876,7 @@ function openEdit(p: any) {
     target_invoice_date : tid,
     tahun               : p.tahun          ?? new Date().getFullYear(),
     revenue_target      : p.revenue_target ?? 0,
+    revenue_type        : p.revenue_type    ?? 'Existing',
     status              : p.status         ?? 'On Track',
     risk_level          : p.risk_level     ?? 'LOW',
     notes               : p.notes          ?? '',
@@ -1722,13 +1887,35 @@ function openEdit(p: any) {
 async function submitEdit() {
   saving.value = true
   try {
-    const { show, project_id, ...payload } = editModal
+    const raw = toRaw(editModal)
+    const { show, project_id, ...payload } = raw
     // input type=month menghasilkan "YYYY-MM", konversi ke "YYYY-MM-01" untuk DB
     if (payload.target_invoice_date && payload.target_invoice_date.length === 7)
       payload.target_invoice_date = payload.target_invoice_date + '-01'
-    await put(`/v1/revenue/projects/${editModal.project_id}`, payload)
-    editModal.show = false
-    await refresh()
+
+    // Simpan snapshot sebelum update untuk rollback
+    const project = data.value?.projects?.find((p: any) => p.project_id === raw.project_id)
+    const snapshot = project ? { ...project } : null
+
+    // Optimistic update — langsung update data lokal
+    if (project) {
+      Object.assign(project, payload)
+      triggerRef(data)
+    }
+
+    try {
+      await put(`/v1/revenue/projects/${raw.project_id}`, payload)
+      editModal.show = false
+      clearNuxtData('rev-tracker')
+      await refresh()
+    } catch (e: any) {
+      // Rollback jika API gagal
+      if (project && snapshot) {
+        Object.assign(project, snapshot)
+        triggerRef(data)
+      }
+      alert(e?.data?.message || e?.message || 'Gagal menyimpan perubahan.')
+    }
   } finally {
     saving.value = false
   }
@@ -2191,3 +2378,8 @@ onMounted(async () => {
   await loadTrashedCount()
 })
 </script>
+
+<style scoped>
+.fade-enter-active, .fade-leave-active { transition: opacity 0.2s ease; }
+.fade-enter-from, .fade-leave-to { opacity: 0; }
+</style>

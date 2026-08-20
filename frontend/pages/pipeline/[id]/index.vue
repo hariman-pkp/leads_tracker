@@ -110,6 +110,16 @@
                 <label class="form-label">Next FU Date</label>
                 <input v-model="fuForm.tgl_fu_berikut" type="date" class="form-input" />
               </div>
+              <div>
+                <label class="form-label">Tipe FU Berikutnya</label>
+                <select v-model="fuForm.next_fu_type" class="form-select">
+                  <option value="call">📞 Call</option>
+                  <option value="whatsapp">💬 WhatsApp</option>
+                  <option value="kunjungan">🚗 Kunjungan</option>
+                  <option value="meeting">🤝 Meeting</option>
+                  <option value="online">💻 Online</option>
+                </select>
+              </div>
               <div class="flex gap-2 justify-end">
                 <button type="button" @click="showFuForm = false" class="btn-ghost btn-sm">Batal</button>
                 <button type="submit" class="btn-primary btn-sm" :disabled="submitting">
@@ -265,6 +275,7 @@ const fuForm = reactive({
   hasil_fu: 'Interested',
   catatan_fu: '',
   tgl_fu_berikut: '',
+  next_fu_type: 'call',
   status: 'Done',
 })
 
@@ -275,6 +286,7 @@ async function submitFu() {
     showFuForm.value = false
     fuForm.catatan_fu = ''
     fuForm.tgl_fu_berikut = ''
+    fuForm.next_fu_type = 'call'
     await refresh()
   } finally {
     submitting.value = false

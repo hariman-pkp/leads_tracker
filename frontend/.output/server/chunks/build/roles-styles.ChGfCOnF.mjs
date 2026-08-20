@@ -1,8 +1,0 @@
-const roles_vue_vue_type_style_index_0_scoped_65ceaf71_lang = ".badge[data-v-65ceaf71]{border-radius:.25rem;display:inline-block;font-size:.75rem;font-weight:500;line-height:1rem;padding:.125rem .5rem}.badge-blue[data-v-65ceaf71]{background-color:#1e3a8a80;--tw-text-opacity:1;color:rgb(147 197 253/var(--tw-text-opacity,1))}.badge-yellow[data-v-65ceaf71]{background-color:#713f1280;--tw-text-opacity:1;color:rgb(253 224 71/var(--tw-text-opacity,1))}.badge-gray[data-v-65ceaf71]{--tw-bg-opacity:1;background-color:rgb(31 41 55/var(--tw-bg-opacity,1));--tw-text-opacity:1;color:rgb(156 163 175/var(--tw-text-opacity,1))}.toast-enter-active[data-v-65ceaf71],.toast-leave-active[data-v-65ceaf71]{transition:all .3s ease}.toast-enter-from[data-v-65ceaf71],.toast-leave-to[data-v-65ceaf71]{opacity:0;transform:translate(20px)}";
-
-const rolesStyles_ChGfCOnF = [
-  roles_vue_vue_type_style_index_0_scoped_65ceaf71_lang
-];
-
-export { rolesStyles_ChGfCOnF as default };
-//# sourceMappingURL=roles-styles.ChGfCOnF.mjs.map

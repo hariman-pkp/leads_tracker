@@ -196,21 +196,58 @@ class AnnualTargetController extends Controller
             'actual'   => (float)$r->actual,
         ], $katRows);
 
+        $clientTypeRows = DB::select(
+            "SELECT COALESCE(revenue_type,'Existing') AS revenue_type,
+                    COALESCE(SUM(revenue_target),0) AS target,
+                    COALESCE(SUM(actual_revenue),0) AS actual
+             FROM revenue_projects
+             WHERE tahun=? AND is_active=1 AND deleted_at IS NULL
+               AND project_status IN ('Active','Completed')
+             GROUP BY revenue_type ORDER BY revenue_type",
+            [$tahun]
+        );
+        $clientTypeSummary = array_map(fn($r) => [
+            'revenue_type' => $r->revenue_type,
+            'target'      => (float)$r->target,
+            'actual'      => (float)$r->actual,
+        ], $clientTypeRows);
+
+        // Gunakan total actual_revenue dari semua proyek (bukan hanya LOB yg terkonfigurasi)
+        $totalActualRow = DB::selectOne(
+            "SELECT COALESCE(SUM(actual_revenue),0) AS actual
+             FROM revenue_projects
+             WHERE tahun=? AND is_active=1 AND deleted_at IS NULL
+               AND project_status IN ('Active','Completed')",
+            [$tahun]
+        );
+        $totalActual = (float)$totalActualRow->actual;
+
+        $sisaBulan   = 12 - $curMonth;
+        $runRate     = $curMonth > 0 ? round($totalActual / $curMonth, 0) : 0;
+        $proyeksi    = $runRate * 12;
+        $sisaTarget  = max($grandTarget - $totalActual, 0);
+
         return response()->json([
-            'tahun'            => $tahun,
-            'lobs'             => $lobs,
-            'org_names'        => $orgNames,
-            'monthly'          => array_values($monthly),
-            'lob_summary'      => $lobSummary,
-            'kategori_summary' => $kategoriSummary,
-            'grand_target'     => $grandTarget,
-            'grand_actual'     => $grandActual,
-            'grand_ach'        => $grandTarget > 0 ? round($grandActual / $grandTarget * 100, 1) : 0,
-            'ytd_target'       => $ytdTarget,
-            'ytd_actual'       => $ytdActual,
-            'ytd_ach'          => $ytdAch,
-            'ytd_gap'          => $ytdTarget - $ytdActual,
-            'cur_month'        => $curMonth,
+            'tahun'                => $tahun,
+            'lobs'                 => $lobs,
+            'org_names'            => $orgNames,
+            'monthly'              => array_values($monthly),
+            'lob_summary'          => $lobSummary,
+            'kategori_summary'     => $kategoriSummary,
+            'revenue_type_summary' => $clientTypeSummary,
+            'grand_target'         => $grandTarget,
+            'grand_actual'         => $totalActual,
+            'grand_ach'            => $grandTarget > 0 ? round($totalActual / $grandTarget * 100, 1) : 0,
+            'ytd_target'           => $ytdTarget,
+            'ytd_actual'           => $totalActual,
+            'ytd_ach'              => $ytdTarget > 0 ? round($totalActual / $ytdTarget * 100, 1) : 0,
+            'ytd_gap'              => $ytdTarget - $totalActual,
+            'cur_month'            => $curMonth,
+            'run_rate'             => $runRate,
+            'proyeksi_eoy'         => $proyeksi,
+            'sisa_bulan'           => $sisaBulan,
+            'sisa_target'          => $sisaTarget,
+            'target_per_bulan'     => $sisaBulan > 0 ? round($sisaTarget / $sisaBulan, 0) : 0,
         ]);
     }
 }

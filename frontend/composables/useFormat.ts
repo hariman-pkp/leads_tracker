@@ -4,13 +4,15 @@
  */
 
 export function useFormat() {
-  /** Format rupiah: 1500000 → "Rp 1,5Jt" */
+  /** Format rupiah: 1500000 → "Rp 1,5Jt", -690000000 → "-Rp 690,0M" */
   function rupiah(val: number | null | undefined): string {
-    const n = Number(val || 0)
-    if (n >= 1_000_000_000) return `Rp ${(n / 1_000_000_000).toFixed(1)}M`
-    if (n >= 1_000_000)     return `Rp ${(n / 1_000_000).toFixed(1)}Jt`
-    if (n >= 1_000)         return `Rp ${(n / 1_000).toFixed(0)}K`
-    return `Rp ${n.toFixed(0)}`
+    const n = Number(val ?? 0)
+    const abs = Math.abs(n)
+    const sign = n < 0 ? '-' : ''
+    if (abs >= 1_000_000_000) return `${sign}Rp ${(abs / 1_000_000_000).toFixed(1)}M`
+    if (abs >= 1_000_000)     return `${sign}Rp ${(abs / 1_000_000).toFixed(1)}Jt`
+    if (abs >= 1_000)         return `${sign}Rp ${(abs / 1_000).toFixed(0)}K`
+    return `${sign}Rp ${abs.toFixed(0)}`
   }
 
   /** Format angka kompak tanpa "Rp": 1500000 → "1,5Jt" */

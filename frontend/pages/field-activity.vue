@@ -31,6 +31,42 @@
       </div>
     </div>
 
+    <!-- Rencana Kunjungan Hari Ini -->
+    <div class="px-6 pt-5">
+      <div class="bg-apex-surface border border-apex-border rounded-xl overflow-hidden">
+        <div class="px-4 py-3 border-b border-apex-border flex items-center gap-2">
+          <i class="fa-solid fa-car text-emerald-400 text-sm"></i>
+          <span class="font-semibold text-sm text-apex-text">Rencana Kunjungan Hari Ini</span>
+          <span class="ml-auto bg-emerald-900/60 text-emerald-300 text-xs px-2 py-0.5 rounded-full">
+            {{ visitPlans.length }}
+          </span>
+        </div>
+        <div v-if="!visitPlans.length" class="px-4 py-5 text-center text-xs text-apex-faint">
+          Tidak ada rencana kunjungan hari ini
+        </div>
+        <div v-else class="divide-y divide-apex-border">
+          <div v-for="v in visitPlans" :key="v.lead_id"
+               class="px-4 py-3 flex items-center gap-3 hover:bg-apex-card/30 transition">
+            <div class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-apex-text shrink-0"
+                 :style="`background:${userColor(v.sales_owner)}`">
+              {{ initials(v.sales_owner) }}
+            </div>
+            <div class="flex-1 min-w-0">
+              <NuxtLink :to="`/pipeline/${v.lead_id}`"
+                        class="text-sm font-medium text-apex-text hover:text-primary-300 truncate block">
+                {{ v.nama_company }}
+              </NuxtLink>
+              <div class="text-xs text-apex-muted">{{ v.sales_owner }} · {{ v.stage }}</div>
+            </div>
+            <div class="text-right shrink-0">
+              <span class="text-xs px-2 py-0.5 rounded-full bg-emerald-900/40 text-emerald-300">Kunjungan</span>
+              <div v-if="v.last_fu_notes" class="text-xs text-apex-faint mt-1 max-w-[180px] truncate">{{ v.last_fu_notes }}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Map + Sidebar -->
     <div class="flex gap-4 px-6 pt-5 h-[500px]">
       <!-- Main Map -->
@@ -467,9 +503,10 @@ function todayStr() { return _todayStr() }
 function photoUrl(path: string) { return `/storage/${path}` }
 
 // ── State ─────────────────────────────────────────────────────────────────────
-const stats      = ref<any>(null)
-const mapData    = ref<{ positions: any[]; trails: any[] }>({ positions: [], trails: [] })
-const mapLoading = ref(true)
+const stats       = ref<any>(null)
+const visitPlans  = ref<any[]>([])
+const mapData     = ref<{ positions: any[]; trails: any[] }>({ positions: [], trails: [] })
+const mapLoading  = ref(true)
 const logRows    = ref<any[]>([])
 const logTotal   = ref(0)
 const logPage    = ref(1)
@@ -815,6 +852,12 @@ function clearLocation() {
 async function loadStats() {
   try { stats.value = await get('/v1/field-activity/stats') } catch {}
 }
+async function loadVisitPlans() {
+  try {
+    const res: any = await get('/v1/today')
+    visitPlans.value = (res?.due_today ?? []).filter((l: any) => l.next_fu_type === 'kunjungan')
+  } catch {}
+}
 async function loadMap() {
   mapLoading.value = true
   try {
@@ -937,7 +980,7 @@ async function deleteLog(id: number) {
 
 // ── Lifecycle ─────────────────────────────────────────────────────────────────
 onMounted(async () => {
-  await Promise.all([loadStats(), loadMap(), loadLog(), loadUsers()])
+  await Promise.all([loadStats(), loadMap(), loadLog(), loadUsers(), loadVisitPlans()])
 })
 
 onUnmounted(() => {

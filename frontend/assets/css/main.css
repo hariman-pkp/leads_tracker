@@ -152,3 +152,8 @@ html.light .badge-yellow { @apply bg-yellow-100 text-yellow-700 border-yellow-20
 html.light .badge-red    { @apply bg-red-100 text-red-700 border-red-200; }
 html.light .badge-gray   { @apply bg-gray-100 text-gray-600 border-gray-200; }
 html.light .badge-purple { @apply bg-purple-100 text-purple-700 border-purple-200; }
+
+/* PWA safe area support */
+.safe-area-inset-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}

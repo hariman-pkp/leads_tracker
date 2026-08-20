@@ -1,0 +1,6 @@
+.DS_Store
+apex_backup.sql
+apex.tar.gz
+*.sql
+*.tar.gz
+.claude/worktrees/

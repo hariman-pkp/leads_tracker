@@ -80,6 +80,9 @@ class FieldActivityController extends Controller
         $dateFrom = $request->query('date_from', now()->toDateString());
         $dateTo   = $request->query('date_to',   now()->toDateString());
         $userId   = $request->query('user_id', '');
+        $page     = max(1, (int) $request->query('page', 1));
+        $perPage  = min(100, max(1, (int) $request->query('per_page', 10)));
+        $offset   = ($page - 1) * $perPage;
 
         $params = [$dateFrom, $dateTo];
         $userFilter = '';
@@ -120,7 +123,14 @@ class FieldActivityController extends Controller
             LIMIT 5
         ", $params);
 
-        // ── Tabel aktivitas detail ───────────────────────────────────────
+        // ── Tabel aktivitas detail (paginated) ──────────────────────────
+        $totalActivities = (int) DB::selectOne("
+            SELECT COUNT(*) AS c
+            FROM visit_logs vl
+            WHERE DATE(vl.checked_in_at) BETWEEN ? AND ?
+            $userFilter
+        ", $params)->c;
+
         $activities = DB::select("
             SELECT vl.id, vl.user_id, u.nama AS sales_nama,
                    vl.lead_id, l.nama_company AS client_nama,
@@ -151,8 +161,8 @@ class FieldActivityController extends Controller
             WHERE DATE(vl.checked_in_at) BETWEEN ? AND ?
             $userFilter
             ORDER BY vl.checked_in_at DESC
-            LIMIT 200
-        ", $params);
+            LIMIT ? OFFSET ?
+        ", array_merge($params, [$perPage, $offset]));
 
         // ── Rekap harian per sales (untuk chart & tabel rekap) ───────────
         $dailyRecap = DB::select("
@@ -228,6 +238,10 @@ class FieldActivityController extends Controller
             'summary'     => (array)$summary,
             'top_sales'   => array_map(fn($r) => (array)$r, $topSales),
             'activities'  => array_map(fn($r) => (array)$r, $activities),
+            'total'       => $totalActivities,
+            'page'        => $page,
+            'per_page'    => $perPage,
+            'total_pages' => max(1, (int) ceil($totalActivities / $perPage)),
             'daily_recap' => array_map(fn($r) => (array)$r, $dailyRecap),
             'sales_recap' => array_map(fn($r) => (array)$r, $salesRecap),
             'timeline'    => array_map(fn($r) => (array)$r, $timeline),
@@ -382,15 +396,20 @@ class FieldActivityController extends Controller
         ]);
 
         // Auto-done: tandai rencana kunjungan planned hari ini untuk lead yang sama
-        $leadId = $request->input('lead_id');
-        $userId = $request->input('user_id');
-        if ($leadId) {
-            DB::update("
-                UPDATE visit_plans
-                SET status = 'done', visit_log_id = ?, updated_at = NOW()
-                WHERE user_id = ? AND lead_id = ?
-                  AND planned_date = CURRENT_DATE AND status = 'planned'
-            ", [$id, $userId, $leadId]);
+        try {
+            $leadId = $request->input('lead_id');
+            $userId = $request->input('user_id');
+            if ($leadId) {
+                DB::update("
+                    UPDATE visit_plans
+                    SET status = 'done', visit_log_id = ?, updated_at = NOW()
+                    WHERE user_id = ? AND lead_id = ?
+                      AND planned_date = CURRENT_DATE AND status = 'planned'
+                ", [$id, $userId, $leadId]);
+            }
+        } catch (\Exception $e) {
+            // Auto-done gagal tidak boleh membatalkan check-in
+            \Log::warning('Auto-done visit_plan failed: ' . $e->getMessage());
         }
 
         return response()->json(['message' => 'Check-in berhasil dicatat.', 'id' => $id], 201);
